@@ -19,3 +19,18 @@ Tests fuer Backend-Verhalten, Migrationen und Integrationsgrenzen.
 cd backend
 pytest
 ```
+
+## Migrationstests
+
+Die Strukturtests fuer Alembic laufen ohne Datenbank. Der echte Upgrade-/Downgrade-Test wird nur
+ausgefuehrt, wenn `TEST_DATABASE_URL` gesetzt ist:
+
+```bash
+cd backend
+$env:TEST_DATABASE_URL="postgresql+psycopg://user:password@host:5432/test_database"
+pytest tests/integration/test_migrations.py
+```
+
+`TEST_DATABASE_URL` muss auf eine dedizierte PostgreSQL-Testdatenbank zeigen. Der Integrationstest
+setzt die Migrationen auf `base` zurueck, migriert auf `head`, prueft Defaultdaten und Constraints
+und fuehrt anschliessend wieder ein Downgrade auf `base` aus. Die URL wird im Test nicht ausgegeben.
