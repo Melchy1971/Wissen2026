@@ -33,6 +33,7 @@ Relevante Umgebungsvariablen:
 
 - `APP_ENV`: optionale Umgebung, Default `local`.
 - `DATABASE_URL`: PostgreSQL-URL fuer Remote-DB, erforderlich fuer `/health/db` und Alembic.
+- `TEST_DATABASE_URL`: optionale PostgreSQL-Testdatenbank fuer echte Migrationstests.
 - `DEFAULT_WORKSPACE_ID`: vorbereitete Workspace-ID fuer V1.
 - `DEFAULT_USER_ID`: vorbereitete User-ID fuer V1.
 
@@ -62,6 +63,27 @@ alembic revision -m "describe change"
 Autogeneration ist nicht vorausgesetzt. SQL-nahe Migrationen koennen in den generierten Dateien
 unter `migrations/versions/` manuell mit `op.execute(...)` oder Alembic-Operationen gepflegt werden.
 
+Aktueller M1-Migrationsstand:
+
+- `20260430_0001_initial_document_schema.py`: Workspaces, Users, Documents, DocumentVersions.
+- `20260430_0002_document_chunks.py`: versionierte Chunks mit Quellenankern.
+- `20260430_0003_categories_tags.py`: Kategorien, Tags und additive DocumentTags.
+- `20260430_0004_chat_analysis.py`: Chat- und Analyse-Grundtabellen.
+
+Migration gegen eine konfigurierte PostgreSQL-Datenbank ausfuehren:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+Aktuellen Stand pruefen:
+
+```bash
+cd backend
+alembic current
+```
+
 ## Testausfuehrung
 
 ```bash
@@ -72,8 +94,21 @@ pytest
 Die erste Testbasis prueft App-Import und Healthchecks. Lokale Tests benoetigen keine
 PostgreSQL-Verbindung; fehlende DB-Konfiguration wird kontrolliert als Servicefehler erwartet.
 
+Migrationstests ohne DB pruefen Alembic-Struktur und eindeutige Revisionen. Mit
+`TEST_DATABASE_URL` wird ein echter Upgrade-/Downgrade-Lauf gegen PostgreSQL ausgefuehrt:
+
+```bash
+cd backend
+$env:TEST_DATABASE_URL="postgresql+psycopg://user:password@host:5432/test_database"
+pytest tests/integration/test_migrations.py
+```
+
+`TEST_DATABASE_URL` muss auf eine dedizierte Testdatenbank zeigen, da der Test auf `base`
+downgradet und Tabellen entfernt.
+
 ## V1-Grenzen
 
 - Keine Authentifizierung.
+- Mehrbenutzerfaehigkeit ist nur ueber Workspace-/User-Felder vorbereitet.
 - Keine Vektorsuche.
 - Keine Speicherung von Quelldateien ausserhalb abgeleiteter Inhalte und Metadaten.

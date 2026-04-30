@@ -16,45 +16,50 @@ Paket 2 ist abgeschlossen.
 - Alembic im Backend-Kontext initialisiert.
 - Minimale pytest-Testbasis fuer Healthchecks angelegt.
 
-## Neue und geaenderte Dateien in Paket 2
+Paket 3 ist abgeschlossen.
 
-- `README.md`
-- `backend/README.md`
+- Initiale M1-Datenbankmigrationen erstellt.
+- `workspaces` und `users` fuer spaetere Mehrbenutzerfaehigkeit vorbereitet.
+- Dokumentbasis mit `documents` und `document_versions` versioniert.
+- `document_chunks` mit zitierfaehigen Quellenankern ergaenzt.
+- Kategorien, Tags und additive Tag-Zuordnung modelliert.
+- Chat- und Analyse-Grundtabellen fuer spaetere Funktionen vorbereitet.
+- Migrationstests fuer Struktur, Revisionen und optionale PostgreSQL-Testdatenbank ergaenzt.
+
+## Neue Migrationen in Paket 3
+
+- `backend/migrations/versions/20260430_0001_initial_document_schema.py`
+- `backend/migrations/versions/20260430_0002_document_chunks.py`
+- `backend/migrations/versions/20260430_0003_categories_tags.py`
+- `backend/migrations/versions/20260430_0004_chat_analysis.py`
+
+## Weitere neue und geaenderte Dateien in Paket 3
+
 - `backend/alembic.ini`
-- `backend/app/api/README.md`
-- `backend/app/api/health.py`
-- `backend/app/core/config.py`
-- `backend/app/core/database.py`
-- `backend/app/db/connection.py`
-- `backend/app/main.py`
-- `backend/migrations/env.py`
-- `backend/migrations/script.py.mako`
-- `backend/migrations/versions/.gitkeep`
-- `backend/requirements-dev.txt`
-- `backend/requirements.txt`
 - `backend/tests/README.md`
-- `backend/tests/conftest.py`
-- `backend/tests/test_health.py`
-- `docs/prompts/README.md`
-- `frontend/src/features/README.md`
+- `backend/tests/integration/test_migrations.py`
+- `docs/data-model.md`
+- `docs/status.md`
+- `backend/README.md`
 
 ## Offen
 
-- M1 Datenmodell-Migrationen sind noch nicht erstellt.
-- Workspace- und User-Felder sind vorbereitet, aber noch nicht als Datenbankschema versioniert.
-- Echte Remote-PostgreSQL-Verbindung wurde lokal nicht verifiziert, weil keine Zugangsdaten im Repo liegen duerfen.
+- Die Migrationen wurden lokal per SQL-Rendering und Tests ohne DB geprueft; echte PostgreSQL-Ausfuehrung benoetigt `TEST_DATABASE_URL` oder `DATABASE_URL`.
+- Mehrbenutzerfaehigkeit ist nur vorbereitet. Es gibt keine Authentifizierung, keine Rollen und keine Rechtepruefung.
+- UUID-Erzeugung fuer neue Fachdaten muss spaeter durch Anwendung oder eine gesonderte DB-Strategie erfolgen.
+- `updated_at` wird noch nicht automatisch per Trigger gepflegt.
+- Konsistenzregeln fuer einige optionale Quellenbezuege muessen spaeter in Service-Logik oder gezielten Constraints geschaerft werden.
 - ADR-Nummerierung ist doppelt belegt, da aeltere Kurzfassungen neben den ausfuehrlichen V1-ADRs existieren.
 
 ## Naechstes Paket
 
-M1 Datenmodell-Migrationen.
+Paket 4 ist bereit.
 
 Empfohlener Fokus:
 
-- Ausgangsschema fuer Dokumente, Versionen und vorbereitete Workspace/User-Zuordnung definieren.
-- Erste fachliche Alembic-Migration unter `backend/migrations/versions/` anlegen.
-- Keine Authentifizierung und keine Vektorsuche einfuehren.
-- Markdown als kanonische Textquelle und Nicht-Speicherung von Originaldateien im Schema beruecksichtigen.
+- Backend-Zugriffsschicht und einfache Repository-/SQL-Helfer fuer das M1-Schema vorbereiten.
+- Keine Importpipeline, keine Chatlogik und keine KI-Provider-Logik implementieren.
+- Datenzugriffe weiterhin single-user-faehig halten und `workspace_id`/`owner_user_id` konsequent beruecksichtigen.
 
 ## ADR-Startpunkte
 
