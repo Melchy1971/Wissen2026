@@ -1,49 +1,60 @@
 # Projektstatus
 
-## Abgeschlossenes Paket
+## Abgeschlossen
 
 Paket 1 ist abgeschlossen.
-
-Umfang von Paket 1:
 
 - Repo-Struktur geprueft und dokumentarisch geschaerft.
 - Tech-Stack-ADR fuer V1 erstellt.
 - V1-Scope-ADR fuer Grenzen, Nicht-Ziele und vorbereitete Mehrbenutzerfaehigkeit erstellt.
 
-## Geaenderte Dateien
+Paket 2 ist abgeschlossen.
+
+- FastAPI Backend-Grundgeruest erstellt.
+- Konfiguration ueber Umgebungsvariablen vorbereitet.
+- Healthchecks fuer App und DB-Verbindung ergaenzt.
+- Alembic im Backend-Kontext initialisiert.
+- Minimale pytest-Testbasis fuer Healthchecks angelegt.
+
+## Neue und geaenderte Dateien in Paket 2
 
 - `README.md`
 - `backend/README.md`
+- `backend/alembic.ini`
+- `backend/app/api/README.md`
+- `backend/app/api/health.py`
+- `backend/app/core/config.py`
+- `backend/app/core/database.py`
+- `backend/app/db/connection.py`
+- `backend/app/main.py`
+- `backend/migrations/env.py`
+- `backend/migrations/script.py.mako`
+- `backend/migrations/versions/.gitkeep`
+- `backend/requirements-dev.txt`
+- `backend/requirements.txt`
 - `backend/tests/README.md`
-- `backend/migrations/README.md`
-- `backend/app/api/v1/endpoints/README.md`
-- `backend/app/jobs/README.md`
-- `backend/app/models/README.md`
-- `backend/app/schemas/README.md`
-- `backend/app/services/README.md`
-- `frontend/README.md`
-- `frontend/src/components/README.md`
-- `docs/README.md`
-- `docs/api/README.md`
-- `docs/adr/0001-tech-stack-v1.md`
-- `docs/adr/0002-v1-scope-and-boundaries.md`
-- `scripts/README.md`
+- `backend/tests/conftest.py`
+- `backend/tests/test_health.py`
+- `docs/prompts/README.md`
+- `frontend/src/features/README.md`
 
-## Offene Risiken
+## Offen
 
-- Die ADR-Nummerierung ist aktuell doppelt belegt, weil neben den neuen V1-ADRs noch aeltere Kurzfassungen mit denselben Nummern vorhanden sind.
-- Die vorbereitenden Felder fuer spaetere Workspace- und User-Zuordnung sind bislang dokumentiert, aber noch nicht in Modellen oder Migrationen konkretisiert.
-- Die Dokumentation beschreibt bewusst Zielstruktur und Architekturgrenzen, nicht den vollstaendigen Implementierungsstand einzelner Features.
+- M1 Datenmodell-Migrationen sind noch nicht erstellt.
+- Workspace- und User-Felder sind vorbereitet, aber noch nicht als Datenbankschema versioniert.
+- Echte Remote-PostgreSQL-Verbindung wurde lokal nicht verifiziert, weil keine Zugangsdaten im Repo liegen duerfen.
+- ADR-Nummerierung ist doppelt belegt, da aeltere Kurzfassungen neben den ausfuehrlichen V1-ADRs existieren.
 
 ## Naechstes Paket
 
-Paket 2 ist bereit.
+M1 Datenmodell-Migrationen.
 
-Empfohlener Fokus fuer Paket 2:
+Empfohlener Fokus:
 
-- Datenmodell und Alembic-Ausgangsschema fuer V1 konkretisieren.
-- Klare Backend-Domains fuer Dokumente, Versionen und Import-Pipeline anlegen.
-- API-Vertraege und leere Endpunkt-Skelette entlang der ADR-Grenzen vorbereiten.
+- Ausgangsschema fuer Dokumente, Versionen und vorbereitete Workspace/User-Zuordnung definieren.
+- Erste fachliche Alembic-Migration unter `backend/migrations/versions/` anlegen.
+- Keine Authentifizierung und keine Vektorsuche einfuehren.
+- Markdown als kanonische Textquelle und Nicht-Speicherung von Originaldateien im Schema beruecksichtigen.
 
 ## ADR-Startpunkte
 

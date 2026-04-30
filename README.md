@@ -31,14 +31,42 @@ Der aktuelle Stand bildet bewusst die V1-Startstruktur und Architekturentscheidu
 3. Bereichsspezifische README-Dateien in `backend/`, `frontend/`, `docs/` und `scripts/` verwenden.
 4. Danach lokale Entwicklungsumgebung fuer Backend und Frontend einrichten.
 
-Beispiel fuer den Einstieg:
+## Backend-Setup
 
 ```bash
 cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements-dev.txt
+```
 
+Benötigte Umgebungsvariablen fuer den vollstaendigen Backend-Betrieb:
+
+- `APP_ENV`: Laufzeitumgebung, lokal standardmaessig `local`.
+- `DATABASE_URL`: PostgreSQL-Verbindungsstring fuer Remote-DB, z. B. `postgresql+psycopg://user:password@host:5432/dbname`.
+- `DEFAULT_WORKSPACE_ID`: vorbereitete Workspace-ID fuer V1 Single-User.
+- `DEFAULT_USER_ID`: vorbereitete User-ID fuer V1 Single-User.
+
+`/health` funktioniert auch ohne `DATABASE_URL`. `/health/db` und Alembic benoetigen eine
+erreichbare PostgreSQL-Datenbank.
+
+Backend starten:
+
+```bash
+cd backend
+uvicorn app.main:app --reload
+```
+
+Tests ausfuehren:
+
+```bash
+cd backend
+pytest
+```
+
+Frontend-Abhaengigkeiten installieren:
+
+```bash
 cd ..\frontend
 npm install
 ```

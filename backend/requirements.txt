@@ -4,8 +4,3 @@ pydantic-settings
 psycopg[binary,pool]
 sqlalchemy
 alembic
-python-multipart
-httpx
-markdown-it-py
-pypdf
-python-docx
