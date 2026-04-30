@@ -26,6 +26,15 @@ Paket 3 ist abgeschlossen.
 - Chat- und Analyse-Grundtabellen fuer spaetere Funktionen vorbereitet.
 - Migrationstests fuer Struktur, Revisionen und optionale PostgreSQL-Testdatenbank ergaenzt.
 
+Paket 4 ist abgeschlossen.
+
+- Import-Service-Schnittstellen fuer Parser, OCR, KI-Provider und Normalisierung definiert.
+- TXT- und Markdown-Parser als minimaler vertikaler Importpfad implementiert.
+- Deterministischer Markdown-Normalizer ohne inhaltliche Interpretation implementiert.
+- Chunking-Service mit Quellenankern fuer normalisierten Markdown implementiert.
+- Minimaler Import-Endpunkt `POST /documents/import` fuer `.txt` und `.md` ergaenzt.
+- Persistenz fuer Dokument, Dokumentversion und Chunks im Importpfad umgesetzt.
+
 ## Neue Migrationen in Paket 3
 
 - `backend/migrations/versions/20260430_0001_initial_document_schema.py`
@@ -42,6 +51,29 @@ Paket 3 ist abgeschlossen.
 - `docs/status.md`
 - `backend/README.md`
 
+## Neue und geaenderte Module in Paket 4
+
+- `backend/app/api/documents.py`
+- `backend/app/main.py`
+- `backend/app/models/import_models.py`
+- `backend/app/services/chunking_service.py`
+- `backend/app/services/import_service.py`
+- `backend/app/services/ki_provider.py`
+- `backend/app/services/markdown_normalizer.py`
+- `backend/app/services/ocr_service.py`
+- `backend/app/services/parser_service.py`
+- `backend/app/services/README.md`
+- `backend/requirements.txt`
+- `backend/tests/integration/test_documents_import.py`
+- `backend/tests/test_documents_import_api.py`
+- `backend/tests/unit/test_chunking_service.py`
+- `backend/tests/unit/test_markdown_normalizer.py`
+- `backend/tests/unit/test_text_markdown_parsers.py`
+- `backend/tests/README.md`
+- `docs/import-pipeline.md`
+- `docs/data-model.md`
+- `docs/status.md`
+
 ## Offen
 
 - Die Migrationen wurden lokal per SQL-Rendering und Tests ohne DB geprueft; echte PostgreSQL-Ausfuehrung benoetigt `TEST_DATABASE_URL` oder `DATABASE_URL`.
@@ -49,17 +81,20 @@ Paket 3 ist abgeschlossen.
 - UUID-Erzeugung fuer neue Fachdaten muss spaeter durch Anwendung oder eine gesonderte DB-Strategie erfolgen.
 - `updated_at` wird noch nicht automatisch per Trigger gepflegt.
 - Konsistenzregeln fuer einige optionale Quellenbezuege muessen spaeter in Service-Logik oder gezielten Constraints geschaerft werden.
+- Import unterstuetzt aktuell nur `.txt` und `.md`; DOCX, PDF und OCR sind vorbereitet, aber nicht implementiert.
+- Duplikaterkennung im Importpfad ist aktuell app-seitig ueber `content_hash`, nicht per DB-Unique-Constraint abgesichert.
+- Import-Integrationstests gegen PostgreSQL laufen nur mit `TEST_DATABASE_URL`.
 - ADR-Nummerierung ist doppelt belegt, da aeltere Kurzfassungen neben den ausfuehrlichen V1-ADRs existieren.
 
 ## Naechstes Paket
 
-Paket 4 ist bereit.
+Paket 5 ist bereit.
 
 Empfohlener Fokus:
 
-- Backend-Zugriffsschicht und einfache Repository-/SQL-Helfer fuer das M1-Schema vorbereiten.
-- Keine Importpipeline, keine Chatlogik und keine KI-Provider-Logik implementieren.
-- Datenzugriffe weiterhin single-user-faehig halten und `workspace_id`/`owner_user_id` konsequent beruecksichtigen.
+- Dokumentlisten- und Detail-API fuer importierte Dokumente vorbereiten.
+- Chunks und Quellenanker lesbar machen, ohne Chat- oder Rankinglogik einzufuehren.
+- Duplikat- und Fehlerverhalten weiter schaerfen.
 
 ## ADR-Startpunkte
 

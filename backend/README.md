@@ -48,6 +48,43 @@ uvicorn app.main:app --reload
 fuer eine remote erreichbare PostgreSQL-Datenbank und gibt bei fehlender Konfiguration keinen
 geheimen Verbindungsstring aus.
 
+## Import-Endpunkt
+
+Der minimale Importpfad unterstuetzt TXT und Markdown:
+
+- `.txt`
+- `.md`
+
+Endpunkt:
+
+```text
+POST /documents/import
+```
+
+Beispiel:
+
+```bash
+curl -F "file=@notes.md" http://127.0.0.1:8000/documents/import
+```
+
+Beispielantwort:
+
+```json
+{
+  "document_id": "00000000-0000-0000-0000-000000000000",
+  "version_id": "00000000-0000-0000-0000-000000000000",
+  "title": "notes",
+  "chunk_count": 3,
+  "duplicate_status": "created"
+}
+```
+
+Bei gleichem `content_hash` wird kein stilles Duplikat erzeugt. Die API gibt
+`duplicate_status = "duplicate_existing"` und die bestehende Dokument-/Versionsreferenz zurueck.
+
+Originaldateien werden nicht gespeichert. Persistiert werden Dokument-Metadaten, normalisierter
+Markdown, Hashes und Chunks mit Quellenankern.
+
 ## Alembic
 
 Migrationen liegen im Backend unter `migrations/` und verwenden dieselbe `DATABASE_URL` wie die
@@ -105,6 +142,14 @@ pytest tests/integration/test_migrations.py
 
 `TEST_DATABASE_URL` muss auf eine dedizierte Testdatenbank zeigen, da der Test auf `base`
 downgradet und Tabellen entfernt.
+
+Import-Integrationstests nutzen dieselbe Voraussetzung und pruefen `POST /documents/import` fuer
+TXT/Markdown inklusive Dokumentversionen, Chunks und Duplikaterkennung:
+
+```bash
+cd backend
+pytest tests/integration/test_documents_import.py
+```
 
 ## V1-Grenzen
 

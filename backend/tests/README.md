@@ -34,3 +34,7 @@ pytest tests/integration/test_migrations.py
 `TEST_DATABASE_URL` muss auf eine dedizierte PostgreSQL-Testdatenbank zeigen. Der Integrationstest
 setzt die Migrationen auf `base` zurueck, migriert auf `head`, prueft Defaultdaten und Constraints
 und fuehrt anschliessend wieder ein Downgrade auf `base` aus. Die URL wird im Test nicht ausgegeben.
+
+Der optionale Import-Integrationstest nutzt dieselbe Voraussetzung und prueft `POST /documents/import`
+fuer TXT/Markdown inklusive Dokumentversionen, Chunks und Duplikaterkennung. Auch dieser Test setzt
+die Testdatenbank zurueck.

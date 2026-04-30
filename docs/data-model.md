@@ -34,23 +34,26 @@ nicht gespeichert; kanonische Textquelle ist `document_versions.normalized_markd
 
 ## Versionierungsprinzip
 
-`documents` enthaelt stabile Dokument-Metadaten. Der eigentliche kanonische Text liegt in
+`documents` enthaelt stabile Dokument-Metadaten. Im Paket-4-Importpfad wird fuer `.txt` und `.md`
+ein Dokument mit `source_type = upload`, `mime_type`, `content_hash`, Default-Workspace und
+Default-User angelegt. Der eigentliche kanonische Text liegt in
 `document_versions.normalized_markdown`. Jede Version gehoert genau zu einem Dokument und hat eine
-eindeutige `version_number` pro Dokument. `documents.current_version_id` ist nullable, damit Dokument
-und erste Version kontrolliert nacheinander angelegt werden koennen.
+eindeutige `version_number` pro Dokument. Der aktuelle Importpfad legt Version 1 an und setzt danach
+`documents.current_version_id`.
 
 Originaldateien sind nicht Teil des Schemas. Persistiert werden abgeleitete Inhalte, Hashes,
 Metadaten und versionierter Markdown.
 
 ## Chunk- und Quellenankerprinzip
 
-Chunks entstehen spaeter aus `document_versions.normalized_markdown`. Jeder Chunk gehoert zu genau
-einer Dokumentversion und besitzt einen `chunk_index` sowie einen `anchor`. Der Anchor ist pro
-Dokumentversion eindeutig und kann spaeter fuer Chat- oder Analysezitate verwendet werden.
+Chunks entstehen aus `document_versions.normalized_markdown`. Jeder Chunk gehoert zu genau einer
+Dokumentversion und besitzt einen `chunk_index` sowie einen `anchor`. Der aktuelle Anchor hat das
+Format `dv:<document_version_id>:c0000`. Er ist pro Dokumentversion eindeutig und kann spaeter fuer
+Chat- oder Analysezitate verwendet werden.
 
 `heading_path` und `metadata` sind JSONB-Felder fuer Strukturinformationen, etwa Ueberschriften,
-Tabellenhinweise oder Positionsdaten. Ein Fulltext-Index auf `content` ist vorbereitet, ersetzt aber
-keine Suchlogik und ist keine Vektorsuche.
+Tabellenhinweise, Codeblock-Hinweise oder Positionsdaten. Ein Fulltext-Index auf `content` ist
+vorbereitet, ersetzt aber keine Suchlogik und ist keine Vektorsuche.
 
 ## Tag-Prinzip
 
@@ -75,7 +78,7 @@ Analyseergebnisse koennen vor einem spaeteren Commit gespeichert werden; `commit
 
 - Keine Authentifizierung.
 - Keine Rollen- oder Rechtepruefung.
-- Keine Importpipeline.
+- Importpipeline aktuell nur fuer `.txt` und `.md`.
 - Keine Chat- oder Analyse-Service-Logik.
 - Keine verpflichtende Vektorsuche.
 - Keine Speicherung von Originaldateien.
