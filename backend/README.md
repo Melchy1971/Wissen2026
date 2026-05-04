@@ -50,10 +50,11 @@ geheimen Verbindungsstring aus.
 
 ## Import-Endpunkt
 
-Der minimale Importpfad unterstuetzt TXT und Markdown:
+Der minimale Importpfad unterstuetzt TXT, Markdown und DOCX:
 
 - `.txt`
 - `.md`
+- `.docx`
 
 Endpunkt:
 

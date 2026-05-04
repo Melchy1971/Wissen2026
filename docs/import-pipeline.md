@@ -1,12 +1,12 @@
 # Importpipeline V1
 
-Dieses Dokument beschreibt den Paket-4-Stand der Importpipeline. Der implementierte vertikale Pfad
-unterstuetzt TXT und Markdown. DOCX, PDF, OCR und KI-Normalisierung sind ueber Schnittstellen
+Dieses Dokument beschreibt den aktuellen Stand der Importpipeline. Der implementierte vertikale Pfad
+unterstuetzt TXT, Markdown und DOCX. PDF, OCR und KI-Normalisierung sind ueber Schnittstellen
 vorbereitet, aber nicht umgesetzt.
 
 ## Importablauf
 
-`POST /documents/import` akzeptiert einen Multipart-Upload mit `.txt` oder `.md`.
+`POST /documents/import` akzeptiert einen Multipart-Upload mit `.txt`, `.md`, `.docx`, `.doc` oder `.pdf`.
 
 Der Ablauf:
 
@@ -30,18 +30,66 @@ Implementiert:
 
 - `.txt` ueber `TextParser`
 - `.md` ueber `MarkdownParser`
+- `.docx` ueber `DocxParser`
+- `.doc` ueber `DocParser` (Systemabhaengigkeit: LibreOffice, siehe unten)
+- `.pdf` ueber `PdfParser` (Text-Extraktion; Scan-PDFs setzen `ocr_required = True`)
 
 Encoding:
 
 - UTF-8 mit BOM-Unterstuetzung wird bevorzugt.
 - Danach folgt ein kontrollierter Fallback auf `cp1252`, dann `latin-1`.
 
+### PDF-Dokumente (`.pdf`)
+
+`.pdf`-Dateien werden ueber `PdfParser` (Bibliothek: `pypdf`, keine Systemabhaengigkeit) unterstuetzt.
+Der Parser extrahiert Text pro Seite und erzeugt Markdown mit Seitenmarkern:
+
+```markdown
+<!-- page:1 -->
+
+Inhalt der ersten Seite...
+
+<!-- page:2 -->
+
+Inhalt der zweiten Seite...
+```
+
+**OCR-Erkennung:** Wenn die extrahierte Textmenge unter dem Schwellenwert liegt
+(`total_chars < page_count * 50`), setzt der Parser `ocr_required = True`. Damit signalisiert er,
+dass es sich um ein Scan-PDF handelt, dessen Inhalt per OCR erschlossen werden muss.
+Ohne konfigurierten OCR-Engine gibt der Import einen kontrollierten Fehler zurueck.
+
+Verhalten:
+- Text-PDFs werden vollstaendig extrahiert.
+- Seitenbezug bleibt ueber `<!-- page:N -->`-Kommentare im Markdown erhalten.
+- Seiten, deren Extraktion fehlschlaegt, werden als leer behandelt (kein Abbruch).
+- Beschaedigte oder nicht lesbare PDFs liefern `ParserError`.
+- Originaldatei wird nicht gespeichert.
+- `metadata.page_count`, `metadata.extraction_method`, `metadata.total_chars_extracted`
+  und `metadata.ocr_required` werden immer gesetzt.
+
 Nicht implementiert:
 
-- DOC/DOCX
-- PDF
-- OCR
+- OCR (naechster Task)
 - automatische KI-Interpretation
+
+### DOC-Altdokumente (`.doc`)
+
+`.doc`-Dateien werden ueber `DocParser` unterstuetzt. Da Python kein natives `.doc`-Parsing bietet,
+konvertiert `DocParser` die Datei lokal per LibreOffice Headless in ein temporaeres `.docx` und
+uebergibt dieses anschliessend an `DocxParser`.
+
+**Systemabhaengigkeit:** LibreOffice muss installiert sein und `soffice` muss im PATH verfuegbar
+sein. Fehlt LibreOffice, gibt der Import einen `ConverterNotAvailableError` mit Installationshinweis
+zurueck – kein stiller Fallback.
+
+Verhalten:
+- Temporaere Dateien werden in einem `TemporaryDirectory` angelegt und nach der Verarbeitung
+  automatisch geloescht – auch bei Fehlern.
+- Die Original-Bytes werden nicht gespeichert.
+- `metadata.converter_used` enthaelt den Namen des verwendeten LibreOffice-Befehls.
+- Bei fehlendem LibreOffice: HTTP 422 mit Hinweis auf Installation.
+- Bei korrupter `.doc`-Datei: HTTP 422 mit LibreOffice-Fehlermeldung.
 
 Parser speichern keine Originaldateien. Dateiname, MIME-Type, Bytegroesse, Parsername,
 Parser-Version und erkannte Kodierung duerfen als Metadaten gespeichert werden.

@@ -5,3 +5,5 @@ psycopg[binary,pool]
 sqlalchemy
 alembic
 python-multipart
+python-docx
+pypdf

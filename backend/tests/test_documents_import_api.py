@@ -12,4 +12,4 @@ def test_import_rejects_unsupported_file_type() -> None:
     )
 
     assert response.status_code == 415
-    assert response.json() == {"detail": "Only .txt and .md uploads are supported"}
+    assert response.json() == {"detail": "Only .txt, .md, .docx, .doc and .pdf uploads are supported"}

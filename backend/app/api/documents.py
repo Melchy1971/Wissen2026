@@ -12,7 +12,7 @@ from app.models.import_models import ImportRequest
 from app.services.chunking_service import MarkdownChunkingService
 from app.services.import_service import ImportService
 from app.services.markdown_normalizer import DeterministicMarkdownNormalizer
-from app.services.parser_service import MarkdownParser, StaticParserSelector, TextParser
+from app.services.parser_service import DocParser, DocxParser, MarkdownParser, PdfParser, StaticParserSelector, TextParser
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -30,7 +30,7 @@ class ImportDocumentResponse(BaseModel):
 
 def build_import_service() -> ImportService:
     return ImportService(
-        parser_selector=StaticParserSelector([TextParser(), MarkdownParser()]),
+        parser_selector=StaticParserSelector([TextParser(), MarkdownParser(), DocxParser(), DocParser(), PdfParser()]),
         normalizer=DeterministicMarkdownNormalizer(),
     )
 
@@ -189,10 +189,16 @@ def canonical_mime_type(filename: str, content_type: str | None) -> str:
         return "text/plain"
     if suffix == ".md":
         return "text/markdown"
+    if suffix == ".docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if suffix == ".doc":
+        return "application/msword"
+    if suffix == ".pdf":
+        return "application/pdf"
 
     raise HTTPException(
         status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        detail="Only .txt and .md uploads are supported",
+        detail="Only .txt, .md, .docx, .doc and .pdf uploads are supported",
     )
 
 
