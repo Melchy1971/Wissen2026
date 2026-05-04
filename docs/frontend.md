@@ -1,10 +1,10 @@
-# Frontend M3a, M3b Retrieval-UI und M3c Chat-UI
+# Frontend M3a, M3b Retrieval-UI und M3c Chat/RAG-Foundation-UI
 
 Stand: 2026-05-04
 
 ## Status
 
-Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erweitert und fuer M3c um eine dokumentgestuetzte Chat-Oberflaeche ergaenzt. M3c ist im Frontend funktional sichtbar, aber end-to-end noch nicht hart abgeschlossen, solange die stabile Chat-API im Backend fehlt.
+Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erweitert und fuer M3c um eine dokumentgestuetzte Chat-Oberflaeche als Foundation ergaenzt. M3c ist im Frontend funktional sichtbar, aber end-to-end noch nicht hart abgeschlossen, solange die stabile Chat-API im Backend fehlt. Ein voll integrierter Wissensbasis-Chat im Sinne von M4 ist damit noch nicht erreicht.
 
 ## Umgesetzter Scope
 
@@ -65,4 +65,4 @@ Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erw
 
 ## Fazit
 
-Der Frontend-Schnitt deckt jetzt auch den M3c-Chatvertrag ab und ist auf Vertragsebene belastbar. Der haerteste Restblocker fuer einen echten M3c-Abschluss liegt derzeit nicht im Frontend, sondern in der fehlenden stabilen Backend-Chat-API und im fehlenden end-to-end RAG-Nachweis.
+Der Frontend-Schnitt deckt jetzt auch den M3c-Chatvertrag auf Foundation-Ebene ab und ist auf Vertragsebene belastbar. Der haerteste Restblocker fuer einen echten M3c-Abschluss liegt derzeit nicht im Frontend, sondern in der fehlenden stabilen Backend-Chat-API und im fehlenden end-to-end RAG-Nachweis. M4 bleibt bis zu dieser Integration ausdruecklich offen.

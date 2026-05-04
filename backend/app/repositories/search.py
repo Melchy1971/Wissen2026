@@ -89,12 +89,12 @@ class SearchRepository:
         rows = self._session.execute(query_stmt).all()
         return [
             SearchChunkRecord(
-                document_id=row.document_id,
+                document_id=str(row.document_id),
                 document_title=row.document_title,
                 document_created_at=row.document_created_at,
-                document_version_id=row.document_version_id,
+                document_version_id=str(row.document_version_id),
                 version_number=row.version_number,
-                chunk_id=row.chunk_id,
+                chunk_id=str(row.chunk_id),
                 position=row.position,
                 text_preview=row.text_preview,
                 anchor=row.anchor,

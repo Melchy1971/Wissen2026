@@ -146,6 +146,24 @@ Begruendung:
 - Der Meilenstein scheitert derzeit nicht an UI oder Hilfsdiensten, sondern an der fehlenden stabilen Chat-API und am fehlenden end-to-end RAG-Nachweis.
 - Ohne diesen Nachweis waere M4 auf ein noch nicht belastbar integriertes Chat/RAG-Fundament aufgesetzt.
 
+## M4 Integrierter Wissensbasis-Chat
+
+Stand des Abgleichs mit Code und Dokumentation am 2026-05-04:
+
+- M4 ist noch nicht implementiert.
+- Die dafuer benoetigte M3c-Foundation ist nur teilweise abgeschlossen.
+
+Fehlende Integrationsbausteine vor echtem M4-Start:
+
+- stabile Chat-HTTP-API im Backend
+- verdrahteter produktiver Antwortpfad ueber Retrieval, Policy, Prompting, LLM und Citation Mapping
+- API- und Integrationsnachweise fuer diesen Antwortpfad
+
+Entscheidung:
+
+- Status fuer M4: `missing`
+- Startfreigabe: `No-Go`
+
 ## Ground Truth = Code, nicht Dokumentation
 
 Diese Datei beschreibt den aktuellen Stand nach Abgleich mit dem Code. Bei Widerspruechen gilt immer der Code als Ground Truth, nicht diese Dokumentation.

@@ -4,6 +4,8 @@ Stand: 2026-05-04
 
 Dieses Dokument ist der kurze Einstiegspunkt fuer den aktuellen Stand von Chat/RAG.
 
+Es beschreibt den Stand der M3c Chat/RAG Foundation, nicht einen bereits integrierten Produkt-Chat im Sinne von M4.
+
 ## Implementiert
 
 - RAG-Datenfluss ist dokumentiert.
@@ -39,3 +41,8 @@ Dieses Dokument ist der kurze Einstiegspunkt fuer den aktuellen Stand von Chat/R
 - Fachlicher Fortschritt: deutlich
 - Harter Abschluss: noch offen
 - Entscheidung fuer M4: `No-Go`
+
+## Abgrenzung zu M4
+
+- M3c liefert Bausteine, Persistenz und GUI-Vertrag.
+- M4 beginnt erst mit einer stabilen Chat-HTTP-API und einem echten integrierten Antwortpfad.

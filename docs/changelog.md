@@ -127,3 +127,16 @@ Stand: 2026-05-04
 - Kein end-to-end RAG-Pipeline-Test ueber echten Antwortpfad.
 - Keine belastbare Retrieval-Integration fuer Chat im produktnahen API-Flow.
 - Daher noch kein harter Abschluss von M3c und kein Go fuer M4.
+
+## 2026-05-04 - M4 Integrierter Wissensbasis-Chat
+
+### Status
+
+- Noch nicht implementiert.
+- Start bleibt blockiert, bis M3c hart abgeschlossen ist.
+
+### Open
+
+- stabile Chat-HTTP-API im Backend
+- integrierter Antwortpfad ueber Retrieval, Prompting, Policy, LLM und Citations
+- API- und Integrationsnachweise fuer diesen produktiven Pfad

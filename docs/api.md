@@ -6,13 +6,16 @@ Stand: 2026-05-04
 
 Dieses Dokument beschreibt die API-Abhaengigkeit der aktuellen GUI auf hoher Ebene. Verbindlicher Detailvertrag fuer die Dokument-Read-Pfade bleibt `docs/api/v1-document-api-contract.md`. Der Retrieval-Pfad fuer M3b ist in `docs/retrieval.md` und `docs/m3b-retrieval-foundation.md` beschrieben. Der Zielvertrag fuer Chat/RAG ist in `docs/chat-rag-api-contract.md` beschrieben.
 
-## Von M3a konsumierte Endpunkte
+## Aktuell von der GUI konsumierte Endpunkte
 
+- M3a Dokument-GUI:
 - `GET /documents`
 - `GET /documents/{document_id}`
 - `GET /documents/{document_id}/versions`
 - `GET /documents/{document_id}/chunks`
+- M3b Retrieval-Erweiterung:
 - `GET /api/v1/search/chunks`
+- M3c Chat-UI gegen Zielvertrag:
 - `POST /api/v1/chat/sessions`
 - `GET /api/v1/chat/sessions`
 - `GET /api/v1/chat/sessions/{id}`
@@ -34,6 +37,7 @@ Dieses Dokument beschreibt die API-Abhaengigkeit der aktuellen GUI auf hoher Ebe
 
 - Die aktuelle M3a-GUI verwendet nur dokumentierte Paket-5-Felder.
 - Die M3b-GUI-Erweiterung verwendet den Search-Endpunkt nur read-only und koppelt nicht direkt an Datenbank- oder Ranking-Interna.
+- Die M3c-Chat-GUI ist gegen den dokumentierten Zielvertrag implementiert, nicht gegen bereits verifizierte Backend-Endpoints.
 - Die GUI fuehrt keine Schreiboperationen ein.
 - Die GUI nutzt den aktuell implementierten Pfad `/documents`, nicht den noch fehlenden Alias `/api/v1/documents`.
 - Der Suchpfad laeuft aktuell ueber `/api/v1/search/chunks`.

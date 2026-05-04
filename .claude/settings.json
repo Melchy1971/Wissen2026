@@ -15,7 +15,8 @@
       "PowerShell(docker exec docstore_db psql -U appuser -d wissen2026 -c \"SELECT indexname, tablename FROM pg_indexes ORDER BY tablename, indexname;\" 2>&1)",
       "PowerShell(docker exec docstore_db psql -U docuser -d wissen2026 -c \"\\\\dt\" 2>&1)",
       "Bash(DATABASE_URL=\"postgresql+psycopg://appuser:Markus..2026@127.0.0.1:5432/wissen2026\" python -m tests.performance.seed_data --docs 100)",
-      "Bash(DATABASE_URL=\"postgresql+psycopg://appuser:Markus..2026@127.0.0.1:5432/wissen2026\" python -m tests.performance.benchmark)"
+      "Bash(DATABASE_URL=\"postgresql+psycopg://appuser:Markus..2026@127.0.0.1:5432/wissen2026\" python -m tests.performance.benchmark)",
+      "Bash(python -m py_compile tests/integration/test_m3b_search.py)"
     ]
   }
 }

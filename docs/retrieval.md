@@ -35,3 +35,4 @@ Dieses Dokument ist der kurze Einstiegspunkt fuer den aktuellen Retrieval-Stand.
 - Harter Abschluss: noch offen
 - Hauptgrund: fehlender echter PostgreSQL-Retrieval- und Ranking-Nachweis fuer den Query-Pfad
 - Entscheidung fuer harten M3c-Chat/RAG-Abschluss: `No-Go`, bis Retrieval und Chat-API end-to-end belegt sind
+- Entscheidung fuer M4-Start: `No-Go`
