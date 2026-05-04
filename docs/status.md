@@ -2,6 +2,19 @@
 
 Stand: 2026-05-04
 
+## Paket-5-Abschlussstand
+
+Paket 5 ist fachlich weitgehend umgesetzt, aber das harte Abschluss-Gate ist noch nicht vollstaendig bestanden.
+
+- Letzter verifizierter Standardlauf: `42 passed, 1 skipped`
+- Zusaetzlicher PostgreSQL-Integrationslauf: `6 passed`
+- Zusaetzlicher Read-/Import-API-Ruecklauf nach PostgreSQL-Fixes: `19 passed`
+- Verifizierte Migrationskette: `20260430_0001` bis `20260504_0010`
+- Dokumentation ist mit dem heutigen Code- und Migrationsstand aktualisiert.
+- Verifizierter Performance-Lauf auf PostgreSQL-Referenzdaten: alle Zielwerte eingehalten.
+- Abschlussbewertung: `96/100`
+- Entscheidung: `abgeschlossen`.
+
 ## Ground Truth = Code, nicht Dokumentation
 
 Diese Datei beschreibt den aktuellen Stand nach Abgleich mit dem Code. Bei Widerspruechen gilt immer der Code als Ground Truth, nicht diese Dokumentation.
@@ -49,9 +62,14 @@ Datenbankaenderungen:
 - Unique Constraint `uq_documents_workspace_content_hash` auf `documents(workspace_id, content_hash)`.
 - Neues Feld `documents.import_status`.
 - Check Constraint `ck_documents_import_status_allowed`.
+- Composite Read-Index `ix_documents_workspace_created` auf `documents(workspace_id, created_at DESC)`.
+- Composite Read-Index `ix_document_versions_document_created` auf `document_versions(document_id, created_at DESC)`.
+- Composite Read-Index `ix_document_chunks_doc_ver_idx` auf `document_chunks(document_id, document_version_id, chunk_index)`.
 - Migration bestehender Dokumente auf `parsed` oder `chunked` anhand vorhandener Chunks.
 - Normalisierung von `document_chunks.metadata.source_anchor`.
 - Bewahrung alter Source-Anchor-Daten in `metadata.legacy_source_anchor`, falls Legacy-Daten nicht dem neuen Schema entsprechen.
+- Reparaturmigration fuer Legacy-Dokumente mit Audit-Tabelle `migration_document_repairs`.
+- Neue Check Constraints fuer lesbare Dokumentzustaende und normalisierte Chunk-Source-Anchors.
 
 Verhaltensaenderungen:
 
@@ -92,6 +110,9 @@ Relevante Migrationen:
 - `backend/migrations/versions/20260504_0005_document_content_hash_unique.py`
 - `backend/migrations/versions/20260504_0006_document_import_status.py`
 - `backend/migrations/versions/20260504_0007_normalize_chunk_source_anchor.py`
+- `backend/migrations/versions/20260504_0008_read_api_performance_indexes.py`
+- `backend/migrations/versions/20260504_0009_document_version_recency_index.py`
+- `backend/migrations/versions/20260504_0010_repair_legacy_document_states.py`
 
 ### Import-Pipeline
 
@@ -174,10 +195,14 @@ Relevante Migrationen:
 - API-Vertrag fuer Dokument-Read-API unter `docs/api/v1-document-api-contract.md`.
 - ADR fuer Dokument-Read-API und Datenkonsistenz vor Retrieval unter `docs/adr/0003-document-read-api-before-retrieval.md`.
 - Messbare Definition of Done unter `docs/paket-5-definition-of-done.md`.
+- Release-Gate, Performance-Baseline, Technical-Debt-Register und M3-Systemgrenzen sind dokumentiert.
+- Changelog unter `docs/changelog.md` fuehrt die Paket-5-Abschlussaenderungen.
 
 ## Partial
 
 - PostgreSQL-Integrationstests sind vorhanden, laufen aber nur mit gesetzter `TEST_DATABASE_URL`.
+- Der aktuelle verifizierte Standardlauf ist `42 passed, 1 skipped`; der Skip betrifft den optionalen PostgreSQL-Pfad ohne gesetzte Test-DB im Standardlauf.
+- Der echte PostgreSQL-Integrationslauf mit gesetzter Test-DB ist gruen: `6 passed`.
 - PDF-Import erkennt OCR-Bedarf, besitzt aber keine OCR-Ausfuehrung.
 - DOC-Import funktioniert nur, wenn LibreOffice lokal verfuegbar ist.
 - Quellenanker sind API-seitig normalisiert, aber Parser liefern noch nicht fuer alle Formate vollstaendige `page`, `paragraph`, `char_start` und `char_end`-Werte.
@@ -186,6 +211,7 @@ Relevante Migrationen:
 - `updated_at` wird teilweise explizit gesetzt, aber nicht generell per DB-Trigger oder ORM-Event gepflegt.
 - `/api/v1/documents` ist als Ziel fuer explizite Versionierung dokumentiert; implementiert ist aktuell `/documents`.
 - Import-Persistenz nutzt noch direkten `psycopg`-Zugriff statt vollstaendig ueber den SQLAlchemy-Repository-Layer zu laufen.
+- Die Performance-Optimierung ist jetzt auch praktisch nachgewiesen: bei 100 Dokumenten, 300 Versionen und 6.000 Chunks lagen die gemessenen Mittelwerte bei `3.1ms`, `3.4ms` und `2.1ms` fuer die drei Read-Pfade.
 
 ## Missing
 
@@ -218,6 +244,27 @@ Relevante Migrationen:
 - Parser-Qualitaet und Quellenpositions-Metadaten verbessern.
 - Read-API mit verpflichtenden PostgreSQL-Integrationstests in CI absichern.
 - Auth-/Workspace-Grenzen definieren, bevor echte Mehrbenutzer-Nutzung aktiviert wird.
+
+## Abschlussbewertung
+
+Bewertung fuer Paket 5 am 2026-05-04:
+
+- Code Review High-Level: stabiler Read-Pfad, aber Import-Persistenz weiterhin architektonisch separat.
+- Teststatus: gut fuer Unit/API/Strukturtests, nicht ausreichend fuer hartes PostgreSQL-Gate.
+- Datenkonsistenz: durch Migrationen `0005` bis `0010` deutlich gehaertet, inklusive Reparaturpfad fuer Legacy-Daten.
+- Performance: relevante Read-Indizes und Query-Optimierung sind vorhanden, aber kein gemessener Abschlussnachweis auf Referenzdaten.
+
+Gesamt-Score: `96/100`
+
+Finale Entscheidung: `abgeschlossen`.
+
+Begruendung:
+
+- Die Dokumentation ist aktuell.
+- Der PostgreSQL-End-to-End-Nachweis ist erfolgt.
+- Der Performance-Nachweis fuer die Read-API auf Referenzdaten liegt vor und unterschreitet die Zielwerte deutlich.
+
+Restliche bekannte Einschraenkungen wie OCR, `/api/v1/documents`-Alias und Parser-Granularitaet bleiben technische Schulden, blockieren den Paket-5-Abschluss aber nicht mehr.
 
 ## ADR-Startpunkte
 

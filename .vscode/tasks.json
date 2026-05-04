@@ -1,0 +1,78 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev: backend",
+      "type": "shell",
+      "command": "H:\\WissenMai2026\\backend\\.venv\\Scripts\\python.exe",
+      "args": [
+        "-m",
+        "uvicorn",
+        "--app-dir",
+        "H:\\WissenMai2026\\backend",
+        "app.main:app",
+        "--reload",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8000"
+      ],
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "owner": "custom",
+          "pattern": [
+            {
+              "regexp": "^(.*)$",
+              "message": 1
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": ".*Started reloader process.*|.*Uvicorn running on.*",
+            "endsPattern": ".*Application startup complete.*"
+          }
+        }
+      ]
+    },
+    {
+      "label": "dev: frontend",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "--prefix",
+        "H:\\WissenMai2026\\frontend",
+        "run",
+        "dev",
+        "--",
+        "--host",
+        "127.0.0.1"
+      ],
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "owner": "custom",
+          "pattern": [
+            {
+              "regexp": "^(.*)$",
+              "message": 1
+            }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": ".*vite.*|.*npm run dev.*",
+            "endsPattern": ".*Local:.*http://127\\.0\\.0\\.1:5173/.*|.*Local:.*http://localhost:5173/.*"
+          }
+        }
+      ]
+    },
+    {
+      "label": "dev: full stack",
+      "dependsOn": [
+        "dev: backend",
+        "dev: frontend"
+      ],
+      "dependsOrder": "parallel"
+    }
+  ]
+}

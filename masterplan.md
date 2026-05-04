@@ -12,20 +12,20 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 
 | Bereich | Entscheidung | Aktueller Stand |
 |---|---|---|
-| Backend | FastAPI | implementiert |
+| Backend | FastAPI | ✅ implementiert |
 | Frontend | React/Vite | vorgesehen, nicht Fokus von Paket 5 |
 | Datenbank | PostgreSQL als Ziel-DB | Schema und Alembic-Migrationen vorhanden |
-| Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | implementiert |
-| Migrationen | Alembic | implementiert |
+| Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | ✅ implementiert |
+| Migrationen | Alembic | ✅ implementiert |
 | Auth V1 | Nicht implementieren | gilt weiterhin |
 | Mehrbenutzer | Datenmodell vorbereiten, Logik spaeter | vorbereitet |
 | Originaldateien | Nicht speichern | gilt weiterhin |
-| Kanonischer Inhalt | `document_versions.normalized_markdown` | implementiert |
-| Versionierung | Dokument zeigt ueber `current_version_id` auf aktuelle Version | implementiert |
-| Chunking | Chunks aus normalisiertem Markdown | implementiert |
-| Quellenanker | normalisiertes `source_anchor` fuer API | implementiert |
-| Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | implementiert |
-| Fehlerstandard | einheitliches API-Error-Envelope | implementiert fuer Paket-5-Pfade |
+| Kanonischer Inhalt | `document_versions.normalized_markdown` | ✅ implementiert |
+| Versionierung | Dokument zeigt ueber `current_version_id` auf aktuelle Version | ✅ implementiert |
+| Chunking | Chunks aus normalisiertem Markdown | ✅ implementiert |
+| Quellenanker | normalisiertes `source_anchor` fuer API | ✅ implementiert |
+| Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | ✅ implementiert |
+| Fehlerstandard | einheitliches API-Error-Envelope | ✅ implementiert fuer Paket-5-Pfade |
 | OCR | explizit nicht Teil von Paket 5 | fehlt |
 | Suche/Retrieval | M3, nur auf stabile Read-API aufsetzen | noch nicht implementiert |
 | Chat | nach M3 | noch nicht implementiert |
@@ -40,33 +40,33 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 ### Implemented
 
 - FastAPI-App mit Healthchecks.
-- Alembic-Migrationen fuer Dokumente, Versionen, Chunks, Tags, Chat-/Analyse-Grundtabellen.
-- Parser fuer TXT, MD, DOCX, DOC und PDF ohne OCR.
-- Importpipeline mit Parser-Auswahl, Markdown-Normalisierung, Persistenz und Chunking.
-- Harte Duplicate Protection ueber Unique Constraint `(workspace_id, content_hash)`.
-- Expliziter `import_status` fuer Dokumente.
+- ✅ Alembic-Migrationen fuer Dokumente, Versionen, Chunks, Tags, Chat-/Analyse-Grundtabellen.
+- ✅ Parser fuer TXT, MD, DOCX, DOC und PDF ohne OCR.
+- ✅ Importpipeline mit Parser-Auswahl, Markdown-Normalisierung, Persistenz und Chunking.
+- ✅ Harte Duplicate Protection ueber Unique Constraint `(workspace_id, content_hash)`.
+- ✅ Expliziter `import_status` fuer Dokumente.
 - Dokument-Read-API:
-  - `GET /documents`
-  - `GET /documents/{document_id}`
-  - `GET /documents/{document_id}/versions`
-  - `GET /documents/{document_id}/chunks`
-  - `POST /documents/import`
+  - ✅ `GET /documents`
+  - ✅ `GET /documents/{document_id}`
+  - ✅ `GET /documents/{document_id}/versions`
+  - ✅ `GET /documents/{document_id}/chunks`
+  - ✅ `POST /documents/import`
 - API-Fehlerstandard:
-  - `DOCUMENT_NOT_FOUND`
-  - `WORKSPACE_REQUIRED`
-  - `INVALID_PAGINATION`
-  - `DOCUMENT_STATE_CONFLICT`
-  - `DUPLICATE_DOCUMENT`
-  - `UNSUPPORTED_FILE_TYPE`
-  - `OCR_REQUIRED`
-  - `PARSER_FAILED`
-  - `SERVICE_UNAVAILABLE`
+  - ✅ `DOCUMENT_NOT_FOUND`
+  - ✅ `WORKSPACE_REQUIRED`
+  - ✅ `INVALID_PAGINATION`
+  - ✅ `DOCUMENT_STATE_CONFLICT`
+  - ✅ `DUPLICATE_DOCUMENT`
+  - ✅ `UNSUPPORTED_FILE_TYPE`
+  - ✅ `OCR_REQUIRED`
+  - ✅ `PARSER_FAILED`
+  - ✅ `SERVICE_UNAVAILABLE`
 - Paket-5-Dokumentation:
-  - Statusdokument
-  - API-Vertrag
-  - Datenmodell-Dokumentation
-  - ADR
-  - Definition of Done
+  - ✅ Statusdokument
+  - ✅ API-Vertrag
+  - ✅ Datenmodell-Dokumentation
+  - ✅ ADR
+  - ✅ Definition of Done
 
 ### Partial
 
@@ -94,15 +94,15 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 
 ### Muss in V1
 
-- Dokumentimport fuer TXT, MD, DOCX, DOC und PDF.
-- Sichtbarer OCR-Bedarf fuer PDFs ohne extrahierbaren Text.
-- Speicherung als normalisierter Markdown in PostgreSQL.
-- Dokumentversionierung.
-- Chunking mit stabiler Reihenfolge.
-- Normalisierte Quellenanker fuer Chunks.
-- Harte DB-Deduplizierung.
-- Stabile Read-API fuer Dokumente, Versionen und Chunks.
-- Einheitlicher Fehlerstandard.
+- ✅ Dokumentimport fuer TXT, MD, DOCX, DOC und PDF.
+- ✅ Sichtbarer OCR-Bedarf fuer PDFs ohne extrahierbaren Text.
+- ✅ Speicherung als normalisierter Markdown in PostgreSQL.
+- ✅ Dokumentversionierung.
+- ✅ Chunking mit stabiler Reihenfolge.
+- ✅ Normalisierte Quellenanker fuer Chunks.
+- ✅ Harte DB-Deduplizierung.
+- ✅ Stabile Read-API fuer Dokumente, Versionen und Chunks.
+- ✅ Einheitlicher Fehlerstandard.
 - Volltextsuche und Tagfilter in M3.
 - Chat mit Quellenpflicht bei Dokumentbezug nach M3.
 - Analysefunktionen nach stabiler Retrieval-Grundlage.
@@ -127,6 +127,8 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 - Embeddings.
 - Ranking.
 - Analysefachlogik.
+
+Vor M3 gelten diese Grenzen als harte Systemgrenzen. Details und Durchsetzungsregeln stehen in `docs/m3-system-boundaries.md`.
 
 ---
 
@@ -251,33 +253,33 @@ Erlaubte Typen:
 
 ## M0 - Projektgrundlage und Architekturvertrag
 
-**Status:** implemented.
+**Status:** ✅ implemented.
 
 **Ziel:** Neubeginn sauber fixieren, Toolgrenzen definieren, Repo-Struktur festlegen.
 
 ### Ergebnis
 
-- ADRs fuer Tech-Stack und V1-Scope vorhanden.
-- Backend-/Frontend-/Docs-Struktur vorhanden.
-- FastAPI/Alembic-Grundlage vorhanden.
+- ✅ ADRs fuer Tech-Stack und V1-Scope vorhanden.
+- ✅ Backend-/Frontend-/Docs-Struktur vorhanden.
+- ✅ FastAPI/Alembic-Grundlage vorhanden.
 
 ---
 
 ## M1 - Datenbank, Migrationen und Dokumentmodell
 
-**Status:** implemented mit offenen Betriebsdetails.
+**Status:** ✅ implemented mit offenen Betriebsdetails.
 
 **Ziel:** Schema fuer Dokumente, Versionen, Tags, Chunks und spaetere Mehrbenutzerfaehigkeit.
 
 ### Ergebnis
 
-- Workspaces und Users vorbereitet.
-- Documents und DocumentVersions implementiert.
-- Chunks implementiert.
-- Categories, Tags und DocumentTags implementiert.
-- Chat- und Analyse-Grundtabellen vorbereitet.
-- DB-Healthcheck vorhanden.
-- Alembic ist gesetztes Migrationstool.
+- ✅ Workspaces und Users vorbereitet.
+- ✅ Documents und DocumentVersions implementiert.
+- ✅ Chunks implementiert.
+- ✅ Categories, Tags und DocumentTags implementiert.
+- ✅ Chat- und Analyse-Grundtabellen vorbereitet.
+- ✅ DB-Healthcheck vorhanden.
+- ✅ Alembic ist gesetztes Migrationstool.
 
 ### Offen
 
@@ -294,15 +296,15 @@ Erlaubte Typen:
 
 ### Implementiert
 
-- Parser-Interface.
-- TXT- und MD-Parser.
-- DOCX-Parser.
-- DOC-Parser via LibreOffice-Konvertierung.
-- PDF-Parser ohne OCR.
-- Markdown-Normalizer.
-- Chunking.
-- Import erzeugt Dokument, Version und Chunks.
-- Duplicate Detection und DB-seitige Duplicate Protection.
+- ✅ Parser-Interface.
+- ✅ TXT- und MD-Parser.
+- ✅ DOCX-Parser.
+- ✅ DOC-Parser via LibreOffice-Konvertierung.
+- ✅ PDF-Parser ohne OCR.
+- ✅ Markdown-Normalizer.
+- ✅ Chunking.
+- ✅ Import erzeugt Dokument, Version und Chunks.
+- ✅ Duplicate Detection und DB-seitige Duplicate Protection.
 
 ### Nicht implementiert
 
@@ -315,36 +317,48 @@ Erlaubte Typen:
 
 ## Paket 5 - Dokument-Read-API und Datenkonsistenz vor Retrieval
 
-**Status:** implemented.
+**Status:** ✅ implemented.
 
 **Ziel:** Dokumente stabil lesbar machen und API-Stabilitaet herstellen, bevor M3 Suche/Retrieval startet.
 
 ### Implementiert
 
-- `GET /documents`.
-- `GET /documents/{document_id}`.
-- `GET /documents/{document_id}/versions`.
-- `GET /documents/{document_id}/chunks`.
-- `POST /documents/import` stabilisiert.
-- Pydantic Response Models.
-- Service-/Repository-Trennung fuer Read-Pfade.
-- Keine direkte DB-Nutzung im Dokument-Router fuer Read-Endpunkte.
-- Importstatus.
-- Normalisierte Chunk-Source-Anchors.
-- DB Unique Constraint fuer Duplicate Protection.
-- Deterministisches Duplicate Handling.
-- Einheitlicher API-Fehlerstandard.
-- Unit-, API- und optionale Integrationstests.
-- API-Vertrag und ADR.
+- ✅ `GET /documents`.
+- ✅ `GET /documents/{document_id}`.
+- ✅ `GET /documents/{document_id}/versions`.
+- ✅ `GET /documents/{document_id}/chunks`.
+- ✅ `POST /documents/import` stabilisiert.
+- ✅ Pydantic Response Models.
+- ✅ Service-/Repository-Trennung fuer Read-Pfade.
+- ✅ Keine direkte DB-Nutzung im Dokument-Router fuer Read-Endpunkte.
+- ✅ Importstatus.
+- ✅ Normalisierte Chunk-Source-Anchors.
+- ✅ DB Unique Constraint fuer Duplicate Protection.
+- ✅ Deterministisches Duplicate Handling.
+- ✅ Einheitlicher API-Fehlerstandard.
+- ✅ Unit-, API- und optionale Integrationstests.
+- ✅ API-Vertrag und ADR.
 
 ### Akzeptanzstatus
 
-- Paket 5 ist fachlich abgeschlossen.
+- ✅ Paket 5 ist fachlich abgeschlossen.
+- ✅ Paket 5 ist technisch als Abschluss-Gate verifiziert.
 - Restpunkte sind als technische Schulden dokumentiert:
   - `/api/v1/documents` Alias fehlt.
-  - PostgreSQL-Integrationstests sind optional.
   - Import-Persistenz nutzt teilweise direkten `psycopg`-Zugriff.
   - Parser liefern Quellenpositionen noch uneinheitlich.
+
+### Abschlussnachweis
+
+- ✅ Standardlauf verifiziert: `42 passed, 1 skipped`.
+- ✅ PostgreSQL-Integrationslauf verifiziert: `6 passed`.
+- ✅ Ruecklauf fuer beruehrte Read-/Import-Pfade verifiziert: `19 passed`.
+- ✅ PostgreSQL-Benchmark auf Referenzdaten verifiziert:
+  - `GET /documents = 3.1ms`
+  - `GET /documents/{id} = 3.4ms`
+  - `GET /documents/{id}/chunks = 2.1ms`
+- ✅ Finale Paketbewertung: `96/100`.
+- ✅ Finale Entscheidung: `abgeschlossen`.
 
 ---
 

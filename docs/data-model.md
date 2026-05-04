@@ -180,6 +180,38 @@ Relevante Migrationen fuer das Dokumentmodell:
 - `20260504_0005_document_content_hash_unique.py`: Unique Constraint fuer `(workspace_id, content_hash)`.
 - `20260504_0006_document_import_status.py`: `documents.import_status`, Backfill und Check Constraint.
 - `20260504_0007_normalize_chunk_source_anchor.py`: Normalisierung von `metadata.source_anchor`.
+- `20260504_0008_read_api_performance_indexes.py`: Read-Indizes fuer Dokumentliste und Chunk-Read-Pfade.
+- `20260504_0009_document_version_recency_index.py`: Recency-Index fuer Versionslisten pro Dokument.
+- `20260504_0010_repair_legacy_document_states.py`: Reparatur und Auditierung inkonsistenter Legacy-Dokumente, Versionen und Chunks.
+
+## Performance- und Reparaturergaenzungen aus Paket 5
+
+### Read-Performance
+
+Das Datenmodell wird seit Paket 5 nicht nur fachlich, sondern auch fuer die Read-API-Zugriffspfade abgesichert:
+
+- `documents(workspace_id, created_at DESC)` fuer Workspace-Listen in absteigender Chronologie.
+- `document_versions(document_id, created_at DESC)` fuer Versionslisten pro Dokument.
+- `document_chunks(document_id, document_version_id, chunk_index)` fuer Chunk-Reads, Chunk-Counts und stabile Reihenfolge.
+
+Diese Indizes stuetzen die aktuelle Repository-Implementierung direkt.
+
+Der aktuelle Repository-Code behandelt ID- und Workspace-Filter kompatibel fuer SQLite-Testumgebungen und PostgreSQL-UUID-Spalten. Damit ist das Read-Modell nicht nur dokumentiert, sondern auf beiden verifizierten Backends praktisch nutzbar.
+
+### Legacy-Reparatur und Audit-Trail
+
+Migration `20260504_0010` fuehrt zusaetzlich ein:
+
+- Audit-Tabelle `migration_document_repairs` fuer protokollierte Reparaturen.
+- Backfill oder Neuverkettung von `documents.current_version_id`, wenn Legacy-Daten inkonsistent sind.
+- Ableitung von `documents.import_status` anhand real vorhandener Versionen und Chunks.
+- kanonische Normalisierung von `document_chunks.metadata.source_anchor`.
+- Erhalt alter Metadaten in `metadata.legacy_source_anchor`, wenn sie nicht dem Normschema entsprechen.
+
+Neue harte Datenregeln:
+
+- Lesbare Dokumente duerfen nicht ohne `current_version_id` bestehen.
+- `document_chunks.metadata.source_anchor` muss das normalisierte Schluesselschema enthalten.
 
 ## V1-Grenzen
 

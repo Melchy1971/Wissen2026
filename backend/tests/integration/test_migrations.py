@@ -59,10 +59,16 @@ def test_migrations_upgrade_downgrade_on_test_database(test_database_url, monkey
         with psycopg.connect(psycopg_url(test_database_url)) as connection:
             with connection.cursor() as cursor:
                 cursor.execute("select id, is_default from workspaces where id = %s", (DEFAULT_WORKSPACE_ID,))
-                assert cursor.fetchone() == (DEFAULT_WORKSPACE_ID, True)
+                workspace_row = cursor.fetchone()
+                assert workspace_row is not None
+                assert str(workspace_row[0]) == DEFAULT_WORKSPACE_ID
+                assert workspace_row[1] is True
 
                 cursor.execute("select id, is_default from users where id = %s", (DEFAULT_USER_ID,))
-                assert cursor.fetchone() == (DEFAULT_USER_ID, True)
+                user_row = cursor.fetchone()
+                assert user_row is not None
+                assert str(user_row[0]) == DEFAULT_USER_ID
+                assert user_row[1] is True
 
                 cursor.execute(
                     """

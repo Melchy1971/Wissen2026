@@ -107,7 +107,7 @@ class DocumentImportPersistenceService:
                     "upload",
                     mime_type,
                     content_hash,
-                    "parsed",
+                    "pending",
                 ),
             )
             cursor.execute(
@@ -141,7 +141,7 @@ class DocumentImportPersistenceService:
             )
             cursor.execute(
                 "update documents set current_version_id = %s, import_status = %s, updated_at = now() where id = %s",
-                (version_id, "chunked", document_id),
+                (version_id, "parsed", document_id),
             )
 
             for chunk in version_chunks:
@@ -174,6 +174,11 @@ class DocumentImportPersistenceService:
                         Jsonb(chunk.metadata),
                     ),
                 )
+
+            cursor.execute(
+                "update documents set import_status = %s, updated_at = now() where id = %s",
+                ("chunked", document_id),
+            )
 
         return PersistedImportDocument(
             document_id=document_id,

@@ -10,6 +10,18 @@ Dieser Vertrag ist die stabile Grundlage fuer M3 Suche/Retrieval. M3 darf nur au
 - Aktuell implementierter Base Path: `/documents`
 - Ziel fuer explizite Versionierung: `/api/v1/documents`
 
+## Verifizierungsstand
+
+Stand des Abgleichs mit der Implementierung am 2026-05-04:
+
+- Router implementiert unter `APIRouter(prefix="/documents")`.
+- Read-Pfade laufen ueber Router -> `DocumentReadService` -> `DocumentRepository`.
+- `get_documents()` nutzt korrelierte Scalar-Subqueries statt Full-Table-Aggregation.
+- Standardlauf verifiziert mit `42 passed, 1 skipped`.
+- PostgreSQL-Integrationslauf verifiziert mit `6 passed`.
+- Zusetzlicher API-/Service-Ruecklauf nach PostgreSQL-Kompatibilitaetsfixes verifiziert mit `19 passed`.
+- Der Vertrag ist damit sowohl gegen SQLite-Testfixtures als auch gegen PostgreSQL-Head praktisch geprueft.
+
 Solange `/api/v1/documents` nicht als kompatibler Alias implementiert ist, ist eine reine Verschiebung von `/documents` nach `/api/v1/documents` ein Breaking Change. M3 muss entweder den aktuell implementierten Pfad `/documents` verwenden oder erst nach Einfuehrung eines Alias auf `/api/v1/documents` wechseln.
 
 ## Allgemeine Regeln
@@ -448,3 +460,9 @@ Mindestens folgende Tests muessen fuer v1 dauerhaft gruen bleiben:
 - `GET /documents/{document_id}/chunks` liefert nur Chunks der aktuellen Version, sortiert nach `position ASC`.
 - Duplicate Import liefert bei Konflikt kein Hard-Fail, sondern `duplicate_existing`.
 - Paket-5-Fehler verwenden das einheitliche Error-Envelope.
+
+Aktuell nachgewiesen:
+
+- Read-API-, Import-API-, Parser-, Normalizer-, Chunking- und Migrations-Strukturtests sind gruen.
+- PostgreSQL-Migrations- und Import-Integrationstests sind gruen.
+- Praktischer Benchmark auf PostgreSQL-Referenzdaten bestaetigt die Zielwerte fuer die drei Read-Pfade.

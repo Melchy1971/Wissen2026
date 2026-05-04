@@ -60,7 +60,9 @@ def test_txt_import_persists_document_version_chunks_and_duplicate_status(
                 )
                 row = cursor.fetchone()
 
-        assert row == (payload["version_id"], "text/plain", "chunked", "# Notes\n\nHello world\n", 1)
+            assert row is not None
+            assert str(row[0]) == payload["version_id"]
+            assert row[1:] == ("text/plain", "chunked", "# Notes\n\nHello world\n", 1)
 
         duplicate_response = client.post("/documents/import", files=files)
 

@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import desc, func, select
+from sqlalchemy import cast, desc, func, select
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.models.documents import Chunk, Document, DocumentVersion
@@ -70,23 +71,31 @@ class DocumentRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def _uuid_param(self, value: str):
+        bind = self._session.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            return cast(value, postgresql.UUID(as_uuid=False))
+        return value
+
     def get_documents(self, *, workspace_id: str, limit: int, offset: int) -> list[DocumentListRecord]:
-        version_counts = (
-            select(
-                DocumentVersion.document_id.label("document_id"),
-                func.count(DocumentVersion.id).label("version_count"),
-            )
-            .group_by(DocumentVersion.document_id)
-            .subquery()
+        # Correlated scalar subqueries run only for the LIMIT-d rows, not the entire table.
+        # With indexes on document_versions(document_id) and
+        # document_chunks(document_id, document_version_id, chunk_index), each subquery
+        # becomes an index lookup instead of a full-table aggregation.
+        version_count_sq = (
+            select(func.count(DocumentVersion.id))
+            .where(DocumentVersion.document_id == Document.id)
+            .correlate(Document)
+            .scalar_subquery()
         )
-        latest_chunk_counts = (
-            select(
-                Chunk.document_id.label("document_id"),
-                Chunk.document_version_id.label("document_version_id"),
-                func.count(Chunk.id).label("chunk_count"),
+        chunk_count_sq = (
+            select(func.count(Chunk.id))
+            .where(
+                Chunk.document_id == Document.id,
+                Chunk.document_version_id == Document.current_version_id,
             )
-            .group_by(Chunk.document_id, Chunk.document_version_id)
-            .subquery()
+            .correlate(Document)
+            .scalar_subquery()
         )
 
         rows = self._session.execute(
@@ -98,16 +107,10 @@ class DocumentRepository:
                 Document.updated_at,
                 Document.current_version_id.label("latest_version_id"),
                 Document.import_status,
-                func.coalesce(version_counts.c.version_count, 0).label("version_count"),
-                func.coalesce(latest_chunk_counts.c.chunk_count, 0).label("chunk_count"),
+                func.coalesce(version_count_sq, 0).label("version_count"),
+                func.coalesce(chunk_count_sq, 0).label("chunk_count"),
             )
-            .outerjoin(version_counts, version_counts.c.document_id == Document.id)
-            .outerjoin(
-                latest_chunk_counts,
-                (latest_chunk_counts.c.document_id == Document.id)
-                & (latest_chunk_counts.c.document_version_id == Document.current_version_id),
-            )
-            .where(Document.workspace_id == workspace_id)
+            .where(Document.workspace_id == self._uuid_param(workspace_id))
             .order_by(desc(Document.created_at))
             .limit(limit)
             .offset(offset)
@@ -182,7 +185,7 @@ class DocumentRepository:
                 last_chunk_id.label("last_chunk_id"),
             )
             .outerjoin(DocumentVersion, Document.current_version_id == DocumentVersion.id)
-            .where(Document.id == document_id)
+            .where(Document.id == self._uuid_param(document_id))
         ).one_or_none()
 
         if row is None:
@@ -223,7 +226,7 @@ class DocumentRepository:
                 DocumentVersion.created_at,
                 DocumentVersion.markdown_hash.label("content_hash"),
             )
-            .where(DocumentVersion.document_id == document_id)
+            .where(DocumentVersion.document_id == self._uuid_param(document_id))
             .order_by(desc(DocumentVersion.created_at), desc(DocumentVersion.version_number))
         ).all()
 
@@ -239,7 +242,7 @@ class DocumentRepository:
 
     def get_latest_version_id(self, document_id: str) -> str | None:
         return self._session.execute(
-            select(Document.current_version_id).where(Document.id == document_id)
+            select(Document.current_version_id).where(Document.id == self._uuid_param(document_id))
         ).scalar_one_or_none()
 
     def get_chunks(self, *, document_id: str, version_id: str, limit: int | None = None) -> list[DocumentChunkRecord]:
@@ -251,7 +254,10 @@ class DocumentRepository:
                 Chunk.anchor,
                 Chunk.metadata_,
             )
-            .where(Chunk.document_id == document_id, Chunk.document_version_id == version_id)
+            .where(
+                Chunk.document_id == self._uuid_param(document_id),
+                Chunk.document_version_id == self._uuid_param(version_id),
+            )
             .order_by(Chunk.chunk_index.asc())
         )
         if limit is not None:
@@ -272,6 +278,8 @@ class DocumentRepository:
 
     def document_exists(self, document_id: str) -> bool:
         return (
-            self._session.execute(select(Document.id).where(Document.id == document_id).limit(1)).scalar_one_or_none()
+            self._session.execute(
+                select(Document.id).where(Document.id == self._uuid_param(document_id)).limit(1)
+            ).scalar_one_or_none()
             is not None
         )
