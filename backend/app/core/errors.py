@@ -30,6 +30,12 @@ class InvalidPaginationApiError(ApiError):
     message = "Invalid pagination parameters"
 
 
+class InvalidQueryApiError(ApiError):
+    status_code = 422
+    code = "INVALID_QUERY"
+    message = "Invalid search query"
+
+
 class DocumentStateConflictApiError(ApiError):
     status_code = 409
     code = "DOCUMENT_STATE_CONFLICT"

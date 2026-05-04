@@ -12,8 +12,9 @@ Dieses Dokument beschreibt den aktuellen Datenmodellstand nach Paket 5. Code und
 - `categories`: workspace-faehige Kategorien.
 - `tags`: workspace-faehige Tags mit normalisiertem Namen.
 - `document_tags`: additive Tag-Zuordnung pro Dokument, Tag und Quelle.
-- `chat_sessions`: vorbereitete Chat-Sitzungen mit Workspace-/Owner-Zuordnung.
-- `chat_messages`: vorbereitete Chat-Nachrichten mit Basis-Kennzeichnung und Quellenmetadaten.
+- `chat_sessions`: Chat-Sitzungen mit Workspace-/Owner-Zuordnung.
+- `chat_messages`: Chat-Nachrichten mit unveraenderlichem Inhalt und Metadaten.
+- `chat_citations`: zitierte Quellen pro Assistant-Nachricht.
 - `analysis_groups`: vorbereitete Analysegruppen.
 - `analysis_group_documents`: Dokumentauswahl fuer Analysegruppen.
 - `analysis_results`: vorbereitete Ergebnisse fuer Merge, Compare und Refine.
@@ -163,9 +164,17 @@ Kategorien und Tags sind getrennt modelliert. Tags sind pro Workspace ueber `nor
 
 Die Zuordnung ist additiv: Der Primaerschluessel `(document_id, tag_id, source)` erlaubt, dass ein manuelles Tag und ein KI-Tag fuer dasselbe Dokument parallel existieren. Manuelle Tags ueberschreiben KI-Tags nicht automatisch.
 
-## Chat- und Analyse-Vorbereitung
+## Chat- und Analyse-Stand
 
-`chat_sessions` und `chat_messages` erlauben spaeter die Persistenz von Chatverlaeufen. `basis_type` unterscheidet `knowledge_base`, `general`, `mixed` und `unknown`, ohne Chatlogik zu implementieren. Quellen koennen zunaechst in `source_metadata` abgelegt werden.
+`chat_sessions`, `chat_messages` und `chat_citations` bilden jetzt die Persistenzgrundlage fuer Chat/RAG-Verlaeufe. `basis_type` unterscheidet weiter `knowledge_base`, `general`, `mixed` und `unknown`. Message-Inhalte werden append-only erzeugt; ein Bearbeitungspfad ist im aktuellen Stand nicht vorgesehen.
+
+Chat-spezifische Regeln:
+
+- `chat_sessions` enthaelt `workspace_id`, `owner_user_id`, `title`, `created_at`, `updated_at`.
+- `chat_messages` enthaelt `session_id`, `message_index`, `role`, `content`, `basis_type`, `metadata`, `created_at`.
+- `chat_citations` enthaelt `message_id`, `chunk_id`, `document_id`, `source_anchor`.
+- Citations referenzieren `documents` und `document_chunks` referenziell konsistent.
+- Fuer zitierte Dokumente und Chunks ist Loeschen bewusst restriktiv modelliert, damit historische Chat-Quellen nicht still brechen.
 
 Analysefunktionen werden ueber `analysis_groups`, `analysis_group_documents`, `analysis_results` und `analysis_result_sources` vorbereitet. Ergebnisarten sind `merge`, `compare` und `refine`. Analyseergebnisse koennen vor einem spaeteren Commit gespeichert werden; `commit_ref` ist optional.
 
@@ -183,6 +192,8 @@ Relevante Migrationen fuer das Dokumentmodell:
 - `20260504_0008_read_api_performance_indexes.py`: Read-Indizes fuer Dokumentliste und Chunk-Read-Pfade.
 - `20260504_0009_document_version_recency_index.py`: Recency-Index fuer Versionslisten pro Dokument.
 - `20260504_0010_repair_legacy_document_states.py`: Reparatur und Auditierung inkonsistenter Legacy-Dokumente, Versionen und Chunks.
+- `20260504_0011_chunk_search_vector.py`: PostgreSQL-FTS-Spalte und `GIN`-Index fuer Retrieval.
+- `20260504_0012_chat_message_metadata_and_citations.py`: Ausrichtung von `chat_messages.metadata` und neue Tabelle `chat_citations`.
 
 ## Performance- und Reparaturergaenzungen aus Paket 5
 
@@ -213,13 +224,42 @@ Neue harte Datenregeln:
 - Lesbare Dokumente duerfen nicht ohne `current_version_id` bestehen.
 - `document_chunks.metadata.source_anchor` muss das normalisierte Schluesselschema enthalten.
 
+## M3b Retrieval
+
+Fuer M3b ist PostgreSQL Full Text Search auf Chunk-Ebene jetzt als erster Retrieval-Pfad angelegt.
+
+Bevorzugte technische Richtung:
+
+- `document_chunks` bleibt die Retrieval-Einheit.
+- Volltextsuche wird ueber PostgreSQL FTS auf `document_chunks.content` aufgebaut.
+- Embeddings und Vektorindizes bleiben explizit spaetere Erweiterungen.
+
+Erwartete technische Ergaenzungen:
+
+- generierte STORED-Spalte `search_vector` auf `document_chunks` fuer PostgreSQL.
+- `GIN`-Index auf `document_chunks.search_vector`.
+- keine Aenderung am kanonischen Inhaltsprinzip: `document_versions.normalized_markdown` bleibt Ursprung, `document_chunks` bleibt Such- und Retrieval-Schnitt.
+
+Aktueller Implementierungsstand:
+
+- Migration `20260504_0011_chunk_search_vector.py` fuehrt die PostgreSQL-Suchspalte und den GIN-Index ein.
+- Unter SQLite bleibt nur Schema-Paritaet fuer lokale Tests, ohne produktionsgleichen FTS-Stack.
+- Der Query-Pfad fuer Retrieval laeuft read-only ueber `documents`, `document_versions` und `document_chunks` mit Join-Validierung.
+
+Bewusste Nicht-Ziele in M3b:
+
+- keine Embedding-Tabellen
+- keine Vektorindizes
+- keine semantische Suche als Pflichtbestandteil
+- Chat-Persistenz ist fuer Sessions, Messages und Citations vorhanden; ein vollstaendiger RAG-Antwortpfad ist damit noch nicht automatisch implementiert.
+
 ## V1-Grenzen
 
 - Keine Authentifizierung.
 - Keine Rollen- oder Rechtepruefung.
 - Keine UI.
 - Keine OCR-Ausfuehrung.
-- Keine Chat- oder Analyse-Service-Logik.
+- Keine vollstaendig integrierte Chat- oder Analyse-Service-Logik ueber HTTP.
 - Keine verpflichtende Vektorsuche.
 - Keine Embedding-Pipeline.
 - Keine Speicherung von Originaldateien.

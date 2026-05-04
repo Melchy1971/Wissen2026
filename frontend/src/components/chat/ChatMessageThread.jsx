@@ -1,0 +1,44 @@
+export function ChatMessageThread({ items }) {
+  return (
+    <section className="panel">
+      <div className="panel__header">
+        <div>
+          <p className="panel__eyebrow">Verlauf</p>
+          <h3>Nachrichten</h3>
+        </div>
+      </div>
+      <ul className="stack-list">
+        {items.map((item) => (
+          <li key={item.id} className={`stack-list__item stack-list__item--block chat-message chat-message--${item.role}`}>
+            <div className="chat-message__header">
+              <strong>{item.role === 'user' ? 'Frage' : 'Antwort'}</strong>
+              <span className="state-card__meta">{item.createdAtLabel}</span>
+            </div>
+            <p className="chat-message__content">{item.content}</p>
+            {item.confidence && item.confidence.sufficientContext === false ? (
+              <div className="chat-warning">
+                <strong>Zu wenig Kontext</strong>
+                <p>Die Antwort wurde als unzureichend belegt markiert.</p>
+                <p className="state-card__meta">Max Score: {item.confidence.retrievalScoreMaxLabel} · Avg Score: {item.confidence.retrievalScoreAvgLabel}</p>
+              </div>
+            ) : null}
+            {Array.isArray(item.citations) && item.citations.length > 0 ? (
+              <div className="chat-citations">
+                <p className="panel__eyebrow">Quellen</p>
+                <ul className="stack-list">
+                  {item.citations.map((citation) => (
+                    <li key={`${item.id}-${citation.chunkId}`} className="stack-list__item stack-list__item--block chat-citation-card">
+                      <p><strong>{citation.documentTitle}</strong></p>
+                      <p className="state-card__meta">Chunk: {citation.chunkId} · {citation.sourceAnchorLabel}</p>
+                      <p>{citation.quotePreview}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

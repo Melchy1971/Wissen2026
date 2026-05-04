@@ -12,6 +12,7 @@ Tests fuer Backend-Verhalten, Migrationen und Integrationsgrenzen.
 - Testdaten sollen die V1-Regeln respektieren: Markdown als kanonische Quelle, keine Originaldateispeicherung, keine Auth-Pflicht.
 - Lokale Tests duerfen keine remote PostgreSQL-Datenbank voraussetzen.
 - DB-nahe Tests muessen fehlende Konfiguration kontrolliert behandeln oder explizit uebersprungen werden.
+- SQLite bleibt ein leichter Dev-/Testpfad ohne produktionsgleiche Volltextsuche. Die M3b-FTS-Migration wird fuer PostgreSQL bereitgestellt; unter SQLite bleibt nur Schema-Paritaet ohne zweiten FTS-Stack.
 
 ## Ausfuehrung
 

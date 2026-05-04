@@ -37,7 +37,8 @@ Stand des Abgleichs mit Code und Frontend-Tests am 2026-05-04:
 - Route `/documents` zeigt die Dokumentliste.
 - Route `/documents/{id}` zeigt Metadaten, Versionen und Chunk-Vorschau.
 - Importstatus und Fehlercodes sind sichtbar.
-- Suche, Chat, Upload und Mutation sind nicht implementiert.
+- Chat, Upload und Mutation sind nicht implementiert.
+- Eine einfache Suche ist mittlerweile als M3b-Erweiterung vorhanden, gehoert aber nicht zum urspruenglichen M3a-Kernscope.
 - Frontend-Validierung aktuell: `5 passed` und `vite build` gruen.
 
 Bewertung:
@@ -49,7 +50,101 @@ Bewertung:
 Entscheidung:
 
 - M3a ist als Prototyp implementiert, aber noch nicht final abgeschlossen.
-- Go fuer M3b Retrieval: `No-Go`, bis Unit-Tests, API-Mock-Tests und ein E2E-Smoke-Test nachgezogen sind.
+- Der fruehere formale Blocker fuer M3b ist durch die jetzt vorliegenden M3b-Implementierungen ueberholt; M3a bleibt dennoch als eigener Meilenstein nicht hart abgeschlossen.
+
+## M3b Retrieval Foundation
+
+Stand des Abgleichs mit Code, Backend-Tests, Frontend-Tests und Build am 2026-05-04:
+
+- Search API unter `/api/v1/search/chunks` ist implementiert.
+- Ranking-Baseline ist im Query-Pfad ueber PostgreSQL FTS und `ts_rank` angelegt.
+- Stabile Sortierung ist technisch umgesetzt ueber `rank DESC`, `documents.created_at DESC`, `chunk_index ASC`, `chunk_id ASC`.
+- Indexierung fuer PostgreSQL ist ueber Migration `20260504_0011_chunk_search_vector.py` implementiert.
+- GUI-Suche ist in der Dokumentuebersicht als einfache Chunk-Suche sichtbar.
+- Lade-, Leer- und Fehlerzustaende fuer die GUI-Suche sind implementiert.
+- Out-of-Scope-Themen bleiben eingehalten: kein Chat, keine LLM-Antwort, kein komplexes Re-Ranking.
+
+Verifizierter Nachweis:
+
+- Backend-Suche und Migrationspfad: `14 passed`
+- Frontend-Screens inklusive Suche: `8 passed`
+- Frontend-Build: `vite build` gruen
+
+Noch offene Luecken vor hartem Abschluss:
+
+- Es gibt aktuell API-Tests und Service-Tests, aber keinen belastbaren PostgreSQL-Retrieval-Integrationstest fuer echte Suchtreffer ueber `/api/v1/search/chunks`.
+- Die Ranking-Baseline ist implementiert, aber nicht durch einen echten Ranking-Regressionstest mit Trefferreihenfolge abgesichert.
+- Der dokumentierte Suchvertrag und die Implementierung sind jetzt grob synchronisiert, aber die Search-API ist noch nicht in einem eigenstaendigen stabilen API-Contract analog zum Dokumentvertrag formalisiert.
+
+Abschlussbewertung:
+
+- Score: `88/100`
+- Entscheidung fuer M3b: `teilweise abgeschlossen`, aber noch kein harter Abschluss.
+- Go fuer M3c Chat/RAG: `No-Go`
+
+Begruendung:
+
+- Der fachliche Scope von M3b ist weitgehend geliefert.
+- Die harten Abschlusskriterien scheitern derzeit nicht an der GUI oder an der Indexmigration, sondern an fehlendem End-to-End-Nachweis fuer Suchqualitaet und Ranking-Stabilitaet auf dem PostgreSQL-Zielpfad.
+- Ohne diesen Nachweis wuerde M3c Chat/RAG auf einem noch nicht ausreichend abgesicherten Retrieval-Fundament aufsetzen.
+
+## M3c Chat/RAG Foundation
+
+Stand des Abgleichs mit Code, fokussierten Backend-Tests, Frontend-Tests und Build am 2026-05-04:
+
+- Chat-Persistenz fuer `chat_sessions`, `chat_messages` und `chat_citations` ist als Datenmodell, Migration und Service angelegt.
+- Context Builder ist implementiert.
+- Prompt Builder ist implementiert.
+- Citation Mapper ist implementiert.
+- Insufficient-Context-Policy ist implementiert.
+- Chat-UI mit Sessionliste, neuer Session, Nachrichtenverlauf, Frageformular, Antwortanzeige, Quellenanzeige und Insufficient-Context-Zustand ist implementiert.
+- Der Frontend-API-Client ist auf den dokumentierten Chat-Vertrag `/api/v1/chat/...` ausgerichtet.
+
+Nicht oder nicht hart abgeschlossen:
+
+- Es gibt noch keinen verifizierten Backend-HTTP-Pfad fuer:
+  - `POST /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions/{id}`
+  - `POST /api/v1/chat/sessions/{id}/messages`
+- Es gibt noch keinen end-to-end verdrahteten RAG-Antwortservice, der Retrieval, Context Builder, Prompt Builder, Policy, LLM-Aufruf und Citation Mapping ueber einen echten API-Pfad zusammensetzt.
+- Eine stabile Retrieval-Integration fuer Chat ist damit noch nicht praktisch nachgewiesen.
+
+Scope-Pruefung:
+
+- Chat Sessions: teilweise vorhanden, aber nur als Persistenzservice und GUI-Vertrag, nicht als harter API-Nachweis.
+- Message API: noch nicht implementiert oder verifiziert.
+- Retrieval Integration: Bausteine vorhanden, aber kein vollstaendiger API-Flow.
+- Context Builder: implementiert und getestet.
+- Prompt Builder: implementiert und getestet.
+- Citation Mapper: implementiert und getestet.
+- GUI Chat: implementiert und getestet.
+
+Nicht-Scope-Pruefung:
+
+- keine Agenten: eingehalten.
+- keine Tool-Nutzung im Produktflow: eingehalten.
+- kein automatisches Bearbeiten von Dokumenten: eingehalten.
+
+Test-Pruefung:
+
+- Unit-Tests fuer Context Builder, Prompt Builder, Citation Mapper und Insufficient-Context-Policy: vorhanden.
+- Persistenztests fuer Chat-Sessions, Messages und Citations: vorhanden.
+- GUI-Tests fuer ChatPage: vorhanden.
+- API-Tests fuer Chat-Endpoints: fehlen.
+- End-to-End-RAG-Pipeline-Tests ueber echten Antwortpfad: fehlen.
+
+Abschlussbewertung:
+
+- Score: `74/100`
+- Entscheidung fuer M3c: `teilweise abgeschlossen`, aber nicht hart abgeschlossen.
+- Go fuer M4: `No-Go`
+
+Begruendung:
+
+- Die M3c-Bausteine und die Chat-GUI sind fachlich weit vorangekommen.
+- Der Meilenstein scheitert derzeit nicht an UI oder Hilfsdiensten, sondern an der fehlenden stabilen Chat-API und am fehlenden end-to-end RAG-Nachweis.
+- Ohne diesen Nachweis waere M4 auf ein noch nicht belastbar integriertes Chat/RAG-Fundament aufgesetzt.
 
 ## Ground Truth = Code, nicht Dokumentation
 

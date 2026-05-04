@@ -13,7 +13,7 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Bereich | Entscheidung | Aktueller Stand |
 |---|---|---|
 | Backend | FastAPI | ✅ implementiert |
-| Frontend | React/Vite | GUI-Start erst nach Paket-5-Gate mit Score >= 90 |
+| Frontend | React/Vite | ✅ M3a-Grundlage und M3c-Chat-UI sind implementiert |
 | Datenbank | PostgreSQL als Ziel-DB | Schema und Alembic-Migrationen vorhanden |
 | Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | ✅ implementiert |
 | Migrationen | Alembic | ✅ implementiert |
@@ -27,9 +27,9 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | ✅ implementiert |
 | Fehlerstandard | einheitliches API-Error-Envelope | ✅ implementiert fuer Paket-5-Pfade |
 | OCR | explizit nicht Teil von Paket 5 | fehlt |
-| GUI-Start | M3a erst nach erfolgreichem Paket-5-Gate mit Score >= 90 | noch nicht gestartet |
-| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | noch nicht implementiert |
-| Chat | nach M3 | noch nicht implementiert |
+| GUI-Start | M3a erst nach erfolgreichem Paket-5-Gate mit Score >= 90 | ✅ gestartet und als read-only GUI-Basis umgesetzt |
+| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | teilweise implementiert, aber noch nicht hart abgeschlossen |
+| Chat | nach M3 | teilweise implementiert, aber noch nicht hart abgeschlossen |
 | Analyse | nach Chat/Retrieval-Grundlage | vorbereitet im Datenmodell, Fachlogik fehlt |
 | Vektorsuche | optional, nicht V1-kritisch | fehlt |
 | Backup/Restore | spaeterer Betriebsmeilenstein | fehlt |
@@ -83,8 +83,7 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 - OCR-Engine.
 - Authentifizierung und Autorisierung.
 - echte Workspace-/User-Verwaltung.
-- Suche, Ranking, Retrieval und Embeddings.
-- Chat-Service und Chat-UI.
+- Embeddings.
 - Analyse-/Merge-/Refine-Fachlogik.
 - Backup-/Restore-Automatisierung.
 - verpflichtende PostgreSQL-CI-Integrationstests.
@@ -162,7 +161,7 @@ Noch zu vereinheitlichen:
 
 ### Frontend
 
-React/Vite bleibt das Ziel fuer die V1-GUI. Die GUI wird bewusst nicht vor Abschluss von Paket 5 entwickelt. GUI-Start ist erst in M3a zulaessig, wenn das Paket-5-Abschluss-Gate erfolgreich mit Score >= 90 erreicht wurde und der Dokument-API-Vertrag als stabile Integrationsbasis vorliegt.
+React/Vite ist die gesetzte V1-GUI-Basis. Der GUI-Start war bewusst an das Paket-5-Gate gekoppelt und wurde danach fuer M3a umgesetzt. Aktuell existieren eine read-only Dokument-GUI, eine Retrieval-Suche in der Dokumentansicht und eine Chat-Oberflaeche auf Vertragsbasis; der harte Abschluss fuer Retrieval und Chat haengt weiter an den noch offenen Backend- und Integrationsnachweisen.
 
 ### Datenbank
 
@@ -175,7 +174,7 @@ PostgreSQL bleibt zentrale Persistenz:
 - Chunk-Metadaten und Quellenanker.
 - Kategorien und Tags.
 - Dokument-Tag-Verknuepfungen.
-- vorbereitete Chat- und Analyse-Tabellen.
+- Chat-Persistenztabellen, vorbereitete Analyse-Tabellen.
 
 ---
 
@@ -494,39 +493,171 @@ Erlaubte Typen:
 
 ---
 
-## M3 - Suche und Quellenanker
+## M3b - Retrieval Foundation
 
-**Status:** next.
+**Status:** partial.
 
-**Ziel:** Robuste Volltext- und Tag-Suche mit zitierfaehigen Quellen auf Basis der stabilen Paket-5-Read-API.
+**Ziel:** Such- und Retrieval-Basis auf Chunk-Ebene einfuehren, ohne Chat, LLM-Antwortgenerierung oder semantische Suche vorzuziehen.
 
 ### Vorbedingungen
 
-- M3a GUI Foundation ist abgeschlossen, falls die GUI parallel zur Suche weiterentwickelt wird.
+- M3a GUI Foundation ist als Prototyp umgesetzt, aber noch nicht als final abgeschlossen freigegeben.
 - M3 nutzt dokumentierte Read-Endpunkte und contract-critical Felder.
 - M3 greift nicht direkt auf Parser-Interna oder freie Chunk-Metadaten zu.
 - Chunks werden ueber `chunk_id`, `position` und `source_anchor` referenziert.
 - Duplicate-Dokumente sind DB-seitig verhindert.
 - Parser-/OCR-Fehler sind sichtbar.
 
+### Zielbild
+
+- Volltextsuche arbeitet auf Chunk-Ebene.
+- Jede Trefferzeile enthaelt Dokumentbezug, Version, Chunk und Quellenanker.
+- Retrieval bleibt read-only und nachvollziehbar.
+- Ranking startet mit einer einfachen technischen Baseline.
+- `workspace_id` begrenzt den Suchraum explizit.
+
+### API-Endpunkte
+
+- Neuer Query-Endpunkt `GET /api/v1/search/chunks`.
+- Query-Parameter:
+  - `workspace_id` required
+  - `q` required
+  - `limit` optional, Default `20`, Range `1..100`
+  - `offset` optional, Default `0`, Range `>= 0`
+- Fehlerfaelle:
+  - `WORKSPACE_REQUIRED`
+  - `INVALID_QUERY`
+  - `INVALID_PAGINATION`
+  - `SERVICE_UNAVAILABLE`
+
+### Ranking-Strategie
+
+- PostgreSQL-Fulltextsuche ueber Chunk-Inhalt.
+- Ranking-Baseline ueber native Rank-Funktion wie `ts_rank`.
+- Sortierung primär nach `rank DESC`.
+- Sekundaere Sortierung fuer Stabilitaet ueber Dokumentzeitstempel und Chunk-Position.
+- Kein komplexes Re-Ranking in M3b.
+
+### Datenmodelländerungen
+
+- Volltextindex oder TSVECTOR-basierter Suchpfad fuer `document_chunks.content`.
+- Keine Embedding-Tabellen.
+- Keine Vektorindizes.
+- Keine Chat- oder Zusammenfassungstabellen.
+- Suchpfad durchsucht nur lesbare Dokumente und gueltige aktuelle Versionen.
+
 ### Tasks
 
-- Such-Contract fuer M3 definieren.
+- Such-Contract fuer M3b definieren.
 - PostgreSQL-Fulltext-Suche auf Chunks implementieren.
-- Suche ueber Tags und Kategorien implementieren.
-- Rankinglogik fuer Volltexttreffer implementieren.
+- Ergebnisliste mit Dokumentbezug implementieren.
+- Ranking-Baseline fuer Volltexttreffer implementieren.
+- Filterung nach `workspace_id` implementieren.
 - Quellenanker im Suchergebnis ausgeben.
-- Such-API bauen.
-- Tests fuer Ranking, Filter und Quellenanker.
+- Query API bauen.
+- Tests fuer Ranking, Filter, Quellenanker und PostgreSQL-Suchpfad.
 - Optional: kompatiblen `/api/v1/documents`-Alias vor M3-Clientbindung einfuehren.
+
+### Tests
+
+- Unit Tests fuer Query-Validierung, Ranking-Baseline und Ergebnis-Mapping.
+- API-Tests fuer erfolgreichen Suchlauf, `workspace_id`-Filter, Pagination und Fehlerfaelle.
+- PostgreSQL-Integrationstests fuer Chunk-Volltextsuche und Ausschluss nicht lesbarer Dokumente.
+
+### Aktueller Abschlussstand
+
+- ✅ `GET /api/v1/search/chunks` ist implementiert.
+- ✅ PostgreSQL-FTS-Ranking-Baseline ist implementiert.
+- ✅ Migration fuer `search_vector` und `GIN`-Index ist vorhanden.
+- ✅ GUI-Suche auf `/documents` ist implementiert.
+- ✅ Lade-, Leer- und Fehlerzustaende fuer Suche sind sichtbar.
+- ✅ Failure-Mode-Matrix und minimales Evaluation-Dataset sind dokumentiert.
+- Offen fuer harten Abschluss:
+  - PostgreSQL-Integrationsnachweis fuer echte Suchtreffer und Filterung.
+  - Ranking-Regressionstest fuer stabile Reihenfolge.
+
+### Vorlaeufige Entscheidung
+
+- M3b ist fachlich weitgehend umgesetzt, aber noch nicht hart abgeschlossen.
+- Score: `88/100`
+- Go fuer M3c Chat/RAG: `No-Go`
 
 ### Akzeptanzkriterien
 
-- Suche findet Inhalte ueber Markdown/Chunks.
-- Tagfilter funktionieren.
-- Treffer enthalten Dokument, Version, Chunk und normalisierten Quellenanker.
-- Tabelleninhalte sind durchsuchbar, soweit sie als Markdown/Chunks extrahiert wurden.
-- Suche indexiert keine Dokumente mit `failed`, `pending` oder OCR-pflichtigem Fehlerzustand.
+- Suche findet Inhalte ueber Chunks.
+- Treffer enthalten Dokumentbezug, Version, Chunk und normalisierten Quellenanker.
+- Ergebnisse sind nach einer technischen Ranking-Baseline sortiert.
+- `workspace_id`-Filter funktioniert.
+- Query API bleibt read-only.
+- Suche indexiert oder liefert keine Dokumente mit `failed`, `pending` oder OCR-pflichtigem Fehlerzustand.
+
+### Out of Scope
+
+- Chat.
+- LLM-Antwortgenerierung.
+- komplexes Re-Ranking.
+- semantische Suche, solange Embeddings nicht stabil sind.
+- automatische Zusammenfassungen.
+
+---
+
+## M3c - Chat/RAG Foundation
+
+**Status:** partial.
+
+**Ziel:** Die Chat-/RAG-Grundlage bereitstellen, damit Fragen spaeter ueber Retrieval-Kontext beantwortet, Quellen maschinenlesbar zugeordnet und unzureichender Kontext deterministisch abgefangen werden kann.
+
+### Tasks
+
+- Chat-HTTP-Vertrag definieren.
+- Context Builder fuer Retrieval-Kontext implementieren.
+- Prompt Builder fuer dokumentbasierte Antworten implementieren.
+- Citation Mapper fuer maschinenlesbare Quellen implementieren.
+- Insufficient-Context-Policy definieren und implementieren.
+- Chat-Session-, Message- und Citation-Persistenz implementieren.
+- Frontend-Chatseite gegen den Zielvertrag anbinden.
+- Tests fuer Halluzinationsschutz, Persistenz und Quellenlogik ergaenzen.
+
+### Aktueller Abschlussstand
+
+- ✅ Prompt-Vertrag fuer dokumentbasierte Antworten ist dokumentiert.
+- ✅ Context Builder ist implementiert.
+- ✅ Prompt Builder ist implementiert.
+- ✅ Citation Mapper ist implementiert.
+- ✅ Insufficient-Context-Policy ist implementiert.
+- ✅ Chat-Session-, Message- und Citation-Persistenz ist implementiert.
+- ✅ Frontend-Chatseite ist implementiert.
+- ✅ Fokustests fuer die neuen M3c-Bausteine sind vorhanden.
+- Offen fuer harten Abschluss:
+  - stabile Backend-HTTP-API fuer Chat-Sessions und Messages
+  - end-to-end Retrieval-Integration ueber echten Antwortpfad
+  - API-Tests fuer Chat-Endpunkte
+
+### Vorlaeufige Entscheidung
+
+- M3c Chat/RAG Foundation ist fachlich deutlich vorangekommen, aber nicht hart abgeschlossen.
+- Score: `74/100`
+- Go fuer M4-Folgearbeit: `No-Go`
+
+### Begruendung
+
+- Die Kernbausteine und die GUI sind vorhanden.
+- Der fehlende HTTP- und Integrationsnachweis verhindert derzeit einen belastbaren Abschluss.
+
+### Akzeptanzkriterien
+
+- Retrieval-Kontext kann deterministisch zu einem Kontextpaket aufgebaut werden.
+- Der Prompt fuer dokumentgestuetzte Antworten ist deterministisch erzeugbar.
+- Quellen koennen aus einer Antwort strukturiert auf Chunks und Dokumente abgebildet werden.
+- Unzureichender Kontext fuehrt zu einer festen No-Answer-Entscheidung statt zu freier Halluzination.
+- Chat-Sessions, Messages und Citations sind persistierbar.
+- Die Chat-GUI kann Sessionliste, Verlauf, Antworten, Citations und Insufficient-Context-Zustaende darstellen.
+
+### Nicht abgeschlossen
+
+- stabile Backend-HTTP-API fuer Chat-Sessions und Messages
+- end-to-end RAG-Antwortpfad ueber echten API-Flow
+- API-Tests fuer Chat-Endpunkte
 
 ---
 
@@ -534,22 +665,20 @@ Erlaubte Typen:
 
 **Status:** missing.
 
-**Ziel:** Chat beantwortet Fragen zielgerichtet, nutzt Trefferkontext, zitiert bei Dokumentbezug und kennzeichnet allgemeine Antworten.
+**Ziel:** Auf der M3c-Grundlage einen voll integrierten Chat bereitstellen, der Fragen ueber Retrieval beantwortet, Quellenpflicht durchsetzt und allgemeine Antworten klar kennzeichnet.
 
 ### Tasks
 
-- Chat-Service mit Retrieval-Schritt.
-- Prompt-Vertrag fuer dokumentbasierte Antworten.
-- Quellenpflicht bei Dokumentbezug.
-- Kennzeichnung fuer Antworten ausserhalb der Wissensbasis.
+- Chat-Service mit Retrieval-Schritt ueber stabilen HTTP-Pfad bereitstellen.
+- LLM-Orchestrierung an Prompt Builder und Policy anbinden.
+- Quellenpflicht im produktiven Antwortpfad durchsetzen.
+- Kennzeichnung fuer Antworten ausserhalb der Wissensbasis im API- und UI-Flow absichern.
 - Dokumentvergleich im Chat.
-- Chat-Session- und Message-Persistenz.
-- Frontend-Chatseite.
-- Tests fuer Halluzinationsschutz und Quellenlogik.
+- API- und Integrationsnachweise fuer den produktiven Antwortpfad.
 
 ### Akzeptanzkriterien
 
-- Bei Dokumentbezug werden Quellen geliefert.
+- Bei Dokumentbezug werden Quellen im echten Antwortpfad geliefert.
 - Ohne passende Quelle wird der Status transparent gekennzeichnet.
 - Vergleich mehrerer Dokumente ist moeglich.
 - Allgemeine Antworten sind klar als nicht aus der Wissensbasis gekennzeichnet.
@@ -613,12 +742,12 @@ Erlaubte Typen:
 1. Paket-5-Aenderungen committen.
 2. Optionalen `/api/v1/documents`-Alias implementieren, falls M3 direkt versionierte Pfade verwenden soll.
 3. PostgreSQL-Integrationstests fuer Paket-5-Read-API in CI oder lokalem Standardlauf absichern.
-4. M3a GUI Foundation nach Paket-5-Gate starten.
-5. M3 Such-Contract definieren.
-6. PostgreSQL-Fulltext-Suche auf Chunks implementieren.
-7. Such-API mit Quellenanker-Responses bauen.
-8. Ranking- und Filtertests ergaenzen.
-9. Danach M4 Chat auf Retrieval-Ergebnisse aufsetzen.
+4. Offene M3a-Testluecken fuer finalen GUI-Abschluss schliessen.
+5. PostgreSQL-Integrationsnachweis fuer M3b-Suchtreffer, Filterung und Ranking ergaenzen.
+6. Ranking-Regressionstest fuer M3b einfuehren.
+7. Stabile Chat-HTTP-API fuer M3c implementieren.
+8. End-to-End-RAG-Pfad ueber echten API-Flow verdrahten und testen.
+9. Erst danach M4 auf der verifizierten M3c-Grundlage starten.
 
 ---
 
@@ -643,6 +772,7 @@ Erlaubte Typen:
 - [Projektstatus](docs/status.md)
 - [Datenmodell V1](docs/data-model.md)
 - [V1 Dokument-API Contract](docs/api/v1-document-api-contract.md)
+- [M3b Retrieval Foundation](docs/m3b-retrieval-foundation.md)
 - [M3a GUI Implementierungsplan](docs/m3a-implementation-plan.md)
 - [M3a GUI ViewModels](docs/m3a-viewmodels.md)
 - [Definition of Done: Paket 5](docs/paket-5-definition-of-done.md)

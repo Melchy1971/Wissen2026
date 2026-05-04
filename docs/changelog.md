@@ -66,3 +66,64 @@ Stand: 2026-05-04
 - Keine eigenstaendigen API-Mock-Tests fuer `404`, `409` und API down.
 - Kein E2E-Smoke-Test.
 - Versionen und Chunks haben noch keine eigenen Routen, sondern leben aktuell im Detailscreen.
+
+## 2026-05-04 - M3b Retrieval Foundation
+
+### Added
+
+- Search API `GET /api/v1/search/chunks`.
+- `SearchService`, `SearchRepository` und Search-Response-Schema.
+- Migration `20260504_0011_chunk_search_vector.py` fuer PostgreSQL `search_vector` und `GIN`-Index.
+- Frontend-Suchmaske auf der Dokumentuebersicht.
+- Suchergebnisliste mit Vorschau, Rank und Quellenanker.
+- Dokument `docs/m3b-retrieval-foundation.md`.
+- Dokument `docs/m3b-retrieval-evaluation-dataset.md`.
+- Dokument `docs/retrieval.md` als Retrieval-Einstiegspunkt.
+
+### Changed
+
+- `docs/api.md`, `docs/frontend.md`, `docs/data-model.md`, `docs/status.md` und `masterplan.md` wurden auf den aktuellen Retrieval-Stand abgeglichen.
+- GUI zeigt jetzt Such-Lade-, Leer- und Fehlerzustaende auf `/documents`.
+- API-Fehlermapping kennt jetzt `INVALID_QUERY` fuer Suchanfragen.
+
+### Validated
+
+- Backend-Retrieval-Nachweis: `14 passed` fuer Search-Service, Search-API und Migrationspfad.
+- Frontend-Such- und Screen-Nachweis: `8 passed`.
+- Frontend-Build: `vite build` erfolgreich.
+
+### Outstanding
+
+- Kein echter PostgreSQL-Integrationsnachweis fuer Treffer, Filterung und Ranking des Suchendpunkts.
+- Kein expliziter Ranking-Regressionstest fuer stabile Trefferreihenfolge.
+- Daher noch kein harter Go-Status fuer M3c Chat/RAG.
+
+## 2026-05-04 - M3c Chat/RAG Foundation
+
+### Added
+
+- `ContextBuilder` fuer deterministische Kontextpakete.
+- `PromptBuilder` fuer dokumentgestuetzte Prompts.
+- `CitationMapper` fuer maschinenlesbare Citations.
+- `InsufficientContextPolicy` mit festen Schwellenwerten und No-Answer-Verhalten.
+- Chat-Persistenzmodelle, Migration und Service fuer Sessions, Messages und Citations.
+- Frontend-Chatseite mit Sessionliste, neuer Session, Nachrichtenverlauf, Quellenanzeige und Insufficient-Context-Zustand.
+- Dokumente `docs/chat-rag-api-contract.md`, `docs/rag-dataflow.md` und `docs/rag.md`.
+
+### Changed
+
+- `docs/status.md`, `docs/api.md`, `docs/data-model.md`, `docs/frontend.md`, `docs/retrieval.md` und `masterplan.md` wurden auf den realen M3c-Stand abgeglichen.
+- `chat_messages.source_metadata` wurde fuer den Zielvertrag auf `metadata` ausgerichtet.
+
+### Validated
+
+- Backend-Fokustests fuer Context Builder, Prompt Builder, Citation Mapper, Insufficient-Context-Policy und Chat-Persistenz: `37 passed`.
+- Frontend-Tests inklusive ChatPage: `11 passed`.
+- Frontend-Build: `vite build` erfolgreich.
+
+### Outstanding
+
+- Keine stabile Chat-HTTP-API im Backend nachgewiesen.
+- Kein end-to-end RAG-Pipeline-Test ueber echten Antwortpfad.
+- Keine belastbare Retrieval-Integration fuer Chat im produktnahen API-Flow.
+- Daher noch kein harter Abschluss von M3c und kein Go fuer M4.

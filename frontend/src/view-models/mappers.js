@@ -26,9 +26,15 @@ function mapErrorTitle(code) {
     NETWORK_ERROR: 'API nicht erreichbar',
     SERVICE_UNAVAILABLE: 'Service nicht verfuegbar',
     DOCUMENT_NOT_FOUND: 'Dokument nicht gefunden',
+    CHAT_SESSION_NOT_FOUND: 'Chat-Sitzung nicht gefunden',
     DOCUMENT_STATE_CONFLICT: 'Dokumentzustand inkonsistent',
     WORKSPACE_REQUIRED: 'Workspace fehlt',
+    INVALID_QUERY: 'Ungueltige Suche',
     INVALID_PAGINATION: 'Ungueltige Pagination',
+    QUERY_REQUIRED: 'Frage fehlt',
+    INSUFFICIENT_CONTEXT: 'Zu wenig Kontext',
+    LLM_UNAVAILABLE: 'LLM nicht verfuegbar',
+    RETRIEVAL_FAILED: 'Retrieval fehlgeschlagen',
     OCR_REQUIRED: 'OCR erforderlich',
     PARSER_FAILED: 'Parser fehlgeschlagen',
   };
@@ -49,7 +55,7 @@ function formatDate(value) {
   return new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-function formatSourceAnchor(anchor) {
+export function formatSourceAnchor(anchor) {
   if (!anchor) {
     return 'Keine Quellenposition verfuegbar';
   }
@@ -61,6 +67,14 @@ function formatSourceAnchor(anchor) {
     parts.push(`Zeichen ${anchor.char_start ?? '?'}-${anchor.char_end ?? '?'}`);
   }
   return parts.join(' | ');
+}
+
+function formatRank(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return '0.00';
+  }
+
+  return value.toFixed(2);
 }
 
 export function mapDocumentListItem(item) {
@@ -98,6 +112,22 @@ export function mapChunkItem(item) {
   };
 }
 
+export function mapSearchResult(item) {
+  return {
+    documentId: item.document_id,
+    documentTitle: item.document_title || 'Unbenanntes Dokument',
+    documentVersionId: item.document_version_id,
+    versionNumber: item.version_number ?? 0,
+    chunkId: item.chunk_id,
+    position: item.position ?? 0,
+    positionLabel: `Chunk ${((item.position ?? 0) + 1).toString()}`,
+    textPreview: item.text_preview || 'Keine Vorschau verfuegbar',
+    sourceAnchorLabel: formatSourceAnchor(item.source_anchor),
+    rank: typeof item.rank === 'number' ? item.rank : 0,
+    rankLabel: formatRank(item.rank),
+  };
+}
+
 export function mapDocumentDetail(detail, versions, chunks) {
   const importStatus = mapImportStatus(detail.import_status);
   return {
@@ -118,5 +148,74 @@ export function mapDocumentDetail(detail, versions, chunks) {
     latestVersionId: detail.latest_version_id || null,
     versions: Array.isArray(versions) ? versions.map((item) => mapVersionItem(item, detail.latest_version_id)) : [],
     chunks: Array.isArray(chunks) ? chunks.map(mapChunkItem) : [],
+  };
+}
+
+function formatScore(value) {
+  if (typeof value !== 'number' || Number.isNaN(value)) {
+    return 'Unbekannt';
+  }
+
+  return value.toFixed(2);
+}
+
+export function mapChatSessionSummary(item) {
+  return {
+    id: item.id,
+    workspaceId: item.workspace_id,
+    title: item.title || 'Neue Sitzung',
+    createdAtLabel: formatDate(item.created_at),
+    updatedAtLabel: formatDate(item.updated_at),
+    messageCount: item.message_count ?? 0,
+    lastUserQuestionPreview: item.last_user_question_preview || 'Noch keine Frage gestellt',
+  };
+}
+
+export function mapChatCitation(item) {
+  return {
+    chunkId: item.chunk_id,
+    documentId: item.document_id,
+    documentTitle: item.document_title || 'Unbenanntes Dokument',
+    sourceAnchorLabel: formatSourceAnchor(item.source_anchor),
+    quotePreview: item.quote_preview || 'Keine Vorschau verfuegbar',
+  };
+}
+
+export function mapChatConfidence(item) {
+  return {
+    sufficientContext: item?.sufficient_context ?? true,
+    retrievalScoreMaxLabel: formatScore(item?.retrieval_score_max),
+    retrievalScoreAvgLabel: formatScore(item?.retrieval_score_avg),
+  };
+}
+
+export function mapChatMessage(item) {
+  const role = item.role || 'assistant';
+  return {
+    id: item.id,
+    role,
+    content: role === 'assistant' ? (item.answer || item.content || '') : (item.content || ''),
+    createdAtLabel: formatDate(item.created_at),
+    citations: Array.isArray(item.citations) ? item.citations.map(mapChatCitation) : [],
+    confidence: role === 'assistant' ? mapChatConfidence(item.confidence) : null,
+  };
+}
+
+export function mapChatSessionDetail(item) {
+  return {
+    id: item.id,
+    workspaceId: item.workspace_id,
+    title: item.title || 'Neue Sitzung',
+    createdAtLabel: formatDate(item.created_at),
+    updatedAtLabel: formatDate(item.updated_at),
+    messages: Array.isArray(item.messages) ? item.messages.map(mapChatMessage) : [],
+  };
+}
+
+export function mapPostedChatResponse(item) {
+  return {
+    sessionId: item.session_id,
+    userMessage: mapChatMessage(item.user_message),
+    assistantMessage: mapChatMessage(item.assistant_message),
   };
 }

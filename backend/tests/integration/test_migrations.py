@@ -105,3 +105,42 @@ def test_migrations_upgrade_downgrade_on_test_database(test_database_url, monkey
         with connection.cursor() as cursor:
             cursor.execute("select to_regclass('public.documents')")
             assert cursor.fetchone() == (None,)
+
+
+def test_chunk_search_vector_migration_creates_generated_column_and_gin_index(test_database_url, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "database_url", test_database_url)
+    config = make_alembic_config()
+
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+
+    try:
+        with psycopg.connect(psycopg_url(test_database_url)) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    select data_type, generation_expression
+                    from information_schema.columns
+                    where table_schema = 'public'
+                      and table_name = 'document_chunks'
+                      and column_name = 'search_vector'
+                    """
+                )
+                column_row = cursor.fetchone()
+                assert column_row is not None
+                assert column_row[0] == "tsvector"
+                assert "to_tsvector('simple'::regconfig, COALESCE(content, ''::text))" in column_row[1]
+
+                cursor.execute(
+                    """
+                    select pg_get_indexdef(indexrelid)
+                    from pg_index
+                    where indrelid = 'document_chunks'::regclass
+                      and indexrelid = 'ix_document_chunks_search_vector'::regclass
+                    """
+                )
+                index_row = cursor.fetchone()
+                assert index_row is not None
+                assert "USING gin (search_vector)" in index_row[0]
+    finally:
+        command.downgrade(config, "base")
