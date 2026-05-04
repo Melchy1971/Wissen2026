@@ -1,137 +1,201 @@
-# Wissensbasis V1 - Optimierter Masterplan
+# Wissensbasis V1 - Masterplan
 
-**Stand:** 2026-04-30  
-**Ziel:** Produktionsnaher Neubeginn einer lokalen/remote-faehigen Wissensbasis. Dokumente werden importiert, per lokaler KI/OCR normalisiert, als Markdown in PostgreSQL persistiert, versioniert, durchsucht, analysiert und per Chat zielgerichtet abgefragt. V1 ist Single-User, aber datenmodellseitig auf spaetere Rollen- und Mehrbenutzerfaehigkeit vorbereitet.
+**Stand:** 2026-05-04  
+**Ground Truth:** Code und Migrationen sind verbindlich. Dokumentation beschreibt den Stand, entscheidet ihn aber nicht.  
+**Ziel:** Eine robuste Wissensbasis, in der Dokumente importiert, normalisiert, versioniert, als Chunks lesbar gemacht, spaeter durchsucht und im Chat/Analysekontext verwendet werden koennen.
+
+V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind datenmodellseitig vorbereitet, aber noch keine Produktfunktion. Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retrieval hergestellt.
 
 ---
 
 ## 1. Leitentscheidungen
 
-| Bereich | Entscheidung |
-|---|---|
-| Betriebsmodell V1 | GUI lokal, PostgreSQL remote auf VPS |
-| Spaeteres Ziel | API und GUI ebenfalls auf VPS betreibbar |
-| Backend | FastAPI |
-| Frontend | React/Vite |
-| Datenbank | PostgreSQL remote |
-| Datenzugriff | SQL direkt |
-| Migrationen | node-pg-migrate nur wenn Node-Tooling gesetzt bleibt; sonst Alembic pruefen |
-| Auth V1 | Nicht implementieren |
-| Mehrbenutzer | Datenmodell vorbereiten, Logik spaeter |
-| KI Import | Lokal via Ollama, austauschbar per Provider-Interface |
-| OCR | Lokal |
-| Originaldateien | Nicht speichern, nur extrahierter Markdown plus Metadaten |
-| Versionierung | Jede Dokumentaenderung erzeugt neue Version |
-| Suche V1 | Volltextsuche + Tags |
-| Chat V1 | Pflicht, allgemein erlaubt, Quellen bei Dokumentbezug Pflicht |
-| Analyse | Dokumente durchsuchen, vergleichen, konsolidieren, freigeben, committen |
-| Vektorsuche | Optional, nicht V1-kritisch |
-| Backup | Automatisiert auf externen Speicher |
-| Restore | Manuell dokumentierter Test |
-| Monitoring | Healthcheck ausreichend |
-| Akzeptierte Ausfallzeit | 1 Stunde |
+| Bereich | Entscheidung | Aktueller Stand |
+|---|---|---|
+| Backend | FastAPI | implementiert |
+| Frontend | React/Vite | vorgesehen, nicht Fokus von Paket 5 |
+| Datenbank | PostgreSQL als Ziel-DB | Schema und Alembic-Migrationen vorhanden |
+| Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | implementiert |
+| Migrationen | Alembic | implementiert |
+| Auth V1 | Nicht implementieren | gilt weiterhin |
+| Mehrbenutzer | Datenmodell vorbereiten, Logik spaeter | vorbereitet |
+| Originaldateien | Nicht speichern | gilt weiterhin |
+| Kanonischer Inhalt | `document_versions.normalized_markdown` | implementiert |
+| Versionierung | Dokument zeigt ueber `current_version_id` auf aktuelle Version | implementiert |
+| Chunking | Chunks aus normalisiertem Markdown | implementiert |
+| Quellenanker | normalisiertes `source_anchor` fuer API | implementiert |
+| Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | implementiert |
+| Fehlerstandard | einheitliches API-Error-Envelope | implementiert fuer Paket-5-Pfade |
+| OCR | explizit nicht Teil von Paket 5 | fehlt |
+| Suche/Retrieval | M3, nur auf stabile Read-API aufsetzen | noch nicht implementiert |
+| Chat | nach M3 | noch nicht implementiert |
+| Analyse | nach Chat/Retrieval-Grundlage | vorbereitet im Datenmodell, Fachlogik fehlt |
+| Vektorsuche | optional, nicht V1-kritisch | fehlt |
+| Backup/Restore | spaeterer Betriebsmeilenstein | fehlt |
 
 ---
 
-## 2. Optimierter V1-Scope
+## 2. Aktueller Scope-Stand
+
+### Implemented
+
+- FastAPI-App mit Healthchecks.
+- Alembic-Migrationen fuer Dokumente, Versionen, Chunks, Tags, Chat-/Analyse-Grundtabellen.
+- Parser fuer TXT, MD, DOCX, DOC und PDF ohne OCR.
+- Importpipeline mit Parser-Auswahl, Markdown-Normalisierung, Persistenz und Chunking.
+- Harte Duplicate Protection ueber Unique Constraint `(workspace_id, content_hash)`.
+- Expliziter `import_status` fuer Dokumente.
+- Dokument-Read-API:
+  - `GET /documents`
+  - `GET /documents/{document_id}`
+  - `GET /documents/{document_id}/versions`
+  - `GET /documents/{document_id}/chunks`
+  - `POST /documents/import`
+- API-Fehlerstandard:
+  - `DOCUMENT_NOT_FOUND`
+  - `WORKSPACE_REQUIRED`
+  - `INVALID_PAGINATION`
+  - `DOCUMENT_STATE_CONFLICT`
+  - `DUPLICATE_DOCUMENT`
+  - `UNSUPPORTED_FILE_TYPE`
+  - `OCR_REQUIRED`
+  - `PARSER_FAILED`
+  - `SERVICE_UNAVAILABLE`
+- Paket-5-Dokumentation:
+  - Statusdokument
+  - API-Vertrag
+  - Datenmodell-Dokumentation
+  - ADR
+  - Definition of Done
+
+### Partial
+
+- PostgreSQL-Integrationstests existieren, laufen aber nur mit `TEST_DATABASE_URL`.
+- PDF-Parser erkennt OCR-Bedarf, fuehrt aber kein OCR aus.
+- DOC-Parser haengt von lokal verfuegbarem LibreOffice ab.
+- Quellenanker sind API-seitig normalisiert, aber Parser liefern nicht fuer alle Formate vollstaendige Positionsdaten.
+- `/api/v1/documents` ist als Zielpfad dokumentiert, aktuell ist `/documents` implementiert.
+- Import-Persistenz nutzt teilweise noch direkten `psycopg`-Zugriff.
+
+### Missing
+
+- OCR-Engine.
+- Authentifizierung und Autorisierung.
+- echte Workspace-/User-Verwaltung.
+- Suche, Ranking, Retrieval und Embeddings.
+- Chat-Service und Chat-UI.
+- Analyse-/Merge-/Refine-Fachlogik.
+- Backup-/Restore-Automatisierung.
+- verpflichtende PostgreSQL-CI-Integrationstests.
+
+---
+
+## 3. V1-Scope
 
 ### Muss in V1
 
-- Import fuer DOC, TXT, MD und PDF.
-- Scan-PDF und Text-PDF werden ueber denselben Importpfad verarbeitet.
-- Lokale OCR fuer nicht direkt extrahierbaren Text.
-- KI-gestuetzte Normalisierung via lokalem Ollama-Provider.
-- Provider-Interface fuer spaetere Austauschbarkeit.
-- Speicherung als Markdown in PostgreSQL.
-- Robuste Suche vor originalgetreuer Formatabbildung.
-- Tabellen muessen moeglichst verlustfrei erhalten bleiben.
-- Dokumentversionierung bei jeder Aenderung.
-- Kategorien + Tags.
-- KI-Tags und manuelle Tags werden additiv gefuehrt.
-- Volltextsuche und Tagfilter.
-- Chat mit Dokumentbezug und Quellenpflicht bei dokumentbasierten Antworten.
-- Chat darf allgemein antworten, muss dann klar kennzeichnen: nicht aus Wissensbasis.
-- Dokumentvergleich im Chat und in Analysefunktion.
-- Merge erzeugt konsolidierte Zusammenfassung als neues Wissensdokument.
-- Refine darf Ton, Struktur, Detailgrad, Quellengewichtung, Inhalte und Tags bearbeiten.
-- Vor Commit: Freigabe und Moeglichkeit, Quellen/Abschnitte abzuwählen.
-- Commit erzeugt immer neues Dokument.
+- Dokumentimport fuer TXT, MD, DOCX, DOC und PDF.
+- Sichtbarer OCR-Bedarf fuer PDFs ohne extrahierbaren Text.
+- Speicherung als normalisierter Markdown in PostgreSQL.
+- Dokumentversionierung.
+- Chunking mit stabiler Reihenfolge.
+- Normalisierte Quellenanker fuer Chunks.
+- Harte DB-Deduplizierung.
+- Stabile Read-API fuer Dokumente, Versionen und Chunks.
+- Einheitlicher Fehlerstandard.
+- Volltextsuche und Tagfilter in M3.
+- Chat mit Quellenpflicht bei Dokumentbezug nach M3.
+- Analysefunktionen nach stabiler Retrieval-Grundlage.
 - Produktionsnahe Tests fuer Kernpfade.
-- PR-basierter Entwicklungsfluss.
 
 ### Explizit nicht in V1
 
 - Authentifizierung.
-- Aktive Rollen-/Rechtepruefung.
-- Vollstaendige Mehrbenutzerlogik.
+- aktive Rollen-/Rechtepruefung.
+- vollstaendige Mehrbenutzerlogik.
 - Vektorsuche als Pflichtbestandteil.
-- VPS-Deployment von GUI/API.
-- Vollstaendiges Alerting.
+- VPS-Deployment von GUI/API als Muss.
+- vollstaendiges Alerting.
 - Speicherung der Originaldateien.
+
+### Explizit nicht in Paket 5
+
+- Suche.
+- Chat.
+- UI.
+- OCR.
+- Embeddings.
+- Ranking.
+- Analysefachlogik.
 
 ---
 
-## 3. Architekturzielbild
+## 4. Architekturzielbild
 
 ### Backend
 
-FastAPI stellt klare Servicegrenzen bereit:
+FastAPI stellt klare Schichten bereit:
 
-- Import-Service
-- OCR-Service
-- Parser-Service
-- Markdown-Normalizer
-- KI-Provider-Interface
-- Document-Service
-- Version-Service
-- Search-Service
-- Chat-Service
-- Analysis-Service
-- Backup-/Health-Service
+- Router: HTTP, Request/Response-Mapping, Dependency Injection.
+- Services: fachliche Regeln und Zustandsentscheidungen.
+- Repositories: Datenbankzugriff.
+- Schemas: stabile Pydantic-Request-/Response-Modelle.
+- Models: SQLAlchemy-Persistenzmodell.
+- Migrations: Alembic.
+
+Aktuell umgesetzt fuer Paket 5:
+
+- Dokument-Router.
+- Dokument-Read-Service.
+- Dokument-Repository.
+- Dokument-Schemas.
+- Fehlerklassen und Exception Handler.
+- Import-Persistenz mit DB-Duplicate-Sicherung.
+
+Noch zu vereinheitlichen:
+
+- Import-Persistenz vollstaendig in die gleiche Repository-/Session-Struktur ueberfuehren.
+- `/api/v1/documents` als kompatiblen Alias implementieren, wenn M3 strikt versionierte Pfade nutzen soll.
 
 ### Frontend
 
-React/Vite ist fuer V1 die bessere Wahl gegenueber Next.js, weil:
-
-- GUI zuerst lokal laufen soll.
-- Server-Side Rendering keinen erkennbaren V1-Nutzen hat.
-- Build- und Deployment-Komplexitaet niedriger bleibt.
-- Claude Studio UI-Komponenten schneller isoliert bauen kann.
+React/Vite bleibt das Ziel fuer die V1-GUI. Paket 5 enthaelt keine UI-Arbeit.
 
 ### Datenbank
 
 PostgreSQL bleibt zentrale Persistenz:
 
-- Dokumente
-- Dokumentversionen
-- Markdown-Inhalte
-- Chunks
-- Kategorien
-- Tags
-- Dokument-Tag-Verknuepfungen
-- Analysegruppen
-- Analyseergebnisse
-- Quellenverweise
-- Chat-Sessions
-- Chat-Nachrichten
-- Health-/Job-Status
+- Dokumente.
+- Dokumentversionen.
+- normalisierter Markdown.
+- Chunks.
+- Chunk-Metadaten und Quellenanker.
+- Kategorien und Tags.
+- Dokument-Tag-Verknuepfungen.
+- vorbereitete Chat- und Analyse-Tabellen.
 
 ---
 
-## 4. Datenmodell-Prinzipien
+## 5. Datenmodell-Prinzipien
 
 ### Muss-Felder Dokument
 
 - `id`
-- `workspace_id` vorbereitet, V1 Default-Workspace
-- `owner_user_id` vorbereitet, V1 Default-User
+- `workspace_id`
+- `owner_user_id`
 - `title`
 - `source_type`
 - `mime_type`
 - `content_hash`
 - `current_version_id`
+- `import_status`
 - `created_at`
 - `updated_at`
+
+Constraints:
+
+- Unique Constraint auf `(workspace_id, content_hash)`.
+- Check Constraint fuer erlaubte `import_status`-Werte.
 
 ### Muss-Felder Dokumentversion
 
@@ -150,9 +214,30 @@ PostgreSQL bleibt zentrale Persistenz:
 ### Chunk-Prinzipien
 
 - Chunks entstehen aus `normalized_markdown`.
-- Tabellen werden nicht zerlegt, wenn technisch vermeidbar.
-- Jeder Chunk bekommt Quellenanker.
-- Quellenanker muessen Chat-Zitate ermoeglichen.
+- Chunks werden ueber `chunk_index ASC` gelesen.
+- API nennt die Position `position`.
+- Fulltext wird nicht in Dokument-Detail-Responses ausgeliefert.
+- Chunk-Endpoint liefert `text_preview` statt Volltext.
+- Jeder API-Chunk hat ein normalisiertes `source_anchor`.
+
+Normalisiertes `source_anchor`:
+
+```json
+{
+  "type": "text",
+  "page": null,
+  "paragraph": null,
+  "char_start": 0,
+  "char_end": 200
+}
+```
+
+Erlaubte Typen:
+
+- `text`
+- `pdf_page`
+- `docx_paragraph`
+- `legacy_unknown`
 
 ### Tag-Prinzipien
 
@@ -162,106 +247,145 @@ PostgreSQL bleibt zentrale Persistenz:
 
 ---
 
-## 5. Meilensteinplan
+## 6. Meilensteinplan
 
 ## M0 - Projektgrundlage und Architekturvertrag
 
+**Status:** implemented.
+
 **Ziel:** Neubeginn sauber fixieren, Toolgrenzen definieren, Repo-Struktur festlegen.
 
-### Tasks
+### Ergebnis
 
-- Architektur-ADR fuer Tech-Stack erstellen.
-- ADR fuer V1-Scope und spaetere Mehrbenutzerfaehigkeit erstellen.
-- Repo-Struktur fuer Backend, Frontend, DB, Docs und Scripts festlegen.
-- PR-Regel und Branch-Konvention festlegen.
-- Task-Kontrakt-Format definieren.
-- Review-Prompt pro Meilenstein vorbereiten.
-
-### Akzeptanzkriterien
-
-- Entscheidungen sind dokumentiert.
-- Kein Auth-Code in V1.
-- Datenmodell ist mehrbenutzerfaehig vorbereitet.
-- Jede Umsetzung laeuft ueber Task-Kontrakt und PR.
+- ADRs fuer Tech-Stack und V1-Scope vorhanden.
+- Backend-/Frontend-/Docs-Struktur vorhanden.
+- FastAPI/Alembic-Grundlage vorhanden.
 
 ---
 
 ## M1 - Datenbank, Migrationen und Dokumentmodell
 
-**Ziel:** PostgreSQL-Schema fuer Dokumente, Versionen, Tags, Chunks und spaetere Mehrbenutzerfaehigkeit.
+**Status:** implemented mit offenen Betriebsdetails.
 
-### Tasks
+**Ziel:** Schema fuer Dokumente, Versionen, Tags, Chunks und spaetere Mehrbenutzerfaehigkeit.
 
-- Migrationen fuer Workspaces und Users als vorbereitete Default-Struktur.
-- Migrationen fuer Documents und DocumentVersions.
-- Migrationen fuer Chunks mit Quellenankern.
-- Migrationen fuer Categories, Tags und DocumentTags.
-- Migrationen fuer Analysis- und Chat-Grundtabellen.
-- DB-Verbindungsmodul fuer remote PostgreSQL.
-- Healthcheck fuer DB-Verbindung.
+### Ergebnis
 
-### Akzeptanzkriterien
+- Workspaces und Users vorbereitet.
+- Documents und DocumentVersions implementiert.
+- Chunks implementiert.
+- Categories, Tags und DocumentTags implementiert.
+- Chat- und Analyse-Grundtabellen vorbereitet.
+- DB-Healthcheck vorhanden.
+- Alembic ist gesetztes Migrationstool.
 
-- Remote-PostgreSQL ist konfigurierbar.
-- Jede Dokumentaenderung kann als Version gespeichert werden.
-- Markdown ist kanonische Textquelle.
-- Source-Anker sind pro Chunk vorhanden.
-- Mehrbenutzerfelder existieren, erzwingen aber noch keine Auth.
+### Offen
+
+- Pflichtlauf der PostgreSQL-Integrationstests in CI.
+- Betriebsrunbook fuer echte Ziel-DB.
 
 ---
 
-## M2 - Import, Parser, OCR und Markdown-Normalisierung
+## M2 - Import, Parser und Markdown-Normalisierung
 
-**Ziel:** Stabile Importpipeline fuer DOC, TXT, MD und PDF inklusive lokaler OCR und Ollama-Normalisierung.
+**Status:** partial.
 
-### Tasks
+**Ziel:** Importpipeline fuer Dokumente mit Parsern, Normalisierung und Persistenz.
 
-- Parser-Interface definieren.
-- Parser fuer TXT und MD.
-- Parser fuer DOC/DOCX.
-- Parser fuer PDF mit Text- und Scan-Fallback.
-- Lokalen OCR-Service integrieren.
-- Ollama-Provider-Interface erstellen.
-- Markdown-Normalizer bauen.
-- Tabellen-Erhalt priorisieren.
-- Import erzeugt Dokumentversion, Chunks, Kategorien und Tags.
-- Duplikaterkennung ueber Hashes.
-- KI-Duplikatanalyse mit manueller Auswahl vorbereiten.
+### Implementiert
 
-### Akzeptanzkriterien
+- Parser-Interface.
+- TXT- und MD-Parser.
+- DOCX-Parser.
+- DOC-Parser via LibreOffice-Konvertierung.
+- PDF-Parser ohne OCR.
+- Markdown-Normalizer.
+- Chunking.
+- Import erzeugt Dokument, Version und Chunks.
+- Duplicate Detection und DB-seitige Duplicate Protection.
 
-- Import speichert keine Originaldatei.
-- Extrahierter Markdown wird persistiert.
-- OCR laeuft lokal.
-- Provider ist austauschbar.
-- Fehlerhafter KI-Output blockiert nicht zwingend den Import, sondern erzeugt validierbare Fallbacks.
+### Nicht implementiert
+
+- OCR-Ausfuehrung.
+- KI-/Ollama-Normalisierung als aktiver Importschritt.
+- Parser-Confidence.
+- Vollstaendige Quellenpositionsdaten fuer alle Parser.
+
+---
+
+## Paket 5 - Dokument-Read-API und Datenkonsistenz vor Retrieval
+
+**Status:** implemented.
+
+**Ziel:** Dokumente stabil lesbar machen und API-Stabilitaet herstellen, bevor M3 Suche/Retrieval startet.
+
+### Implementiert
+
+- `GET /documents`.
+- `GET /documents/{document_id}`.
+- `GET /documents/{document_id}/versions`.
+- `GET /documents/{document_id}/chunks`.
+- `POST /documents/import` stabilisiert.
+- Pydantic Response Models.
+- Service-/Repository-Trennung fuer Read-Pfade.
+- Keine direkte DB-Nutzung im Dokument-Router fuer Read-Endpunkte.
+- Importstatus.
+- Normalisierte Chunk-Source-Anchors.
+- DB Unique Constraint fuer Duplicate Protection.
+- Deterministisches Duplicate Handling.
+- Einheitlicher API-Fehlerstandard.
+- Unit-, API- und optionale Integrationstests.
+- API-Vertrag und ADR.
+
+### Akzeptanzstatus
+
+- Paket 5 ist fachlich abgeschlossen.
+- Restpunkte sind als technische Schulden dokumentiert:
+  - `/api/v1/documents` Alias fehlt.
+  - PostgreSQL-Integrationstests sind optional.
+  - Import-Persistenz nutzt teilweise direkten `psycopg`-Zugriff.
+  - Parser liefern Quellenpositionen noch uneinheitlich.
 
 ---
 
 ## M3 - Suche und Quellenanker
 
-**Ziel:** Robuste Volltext- und Tag-Suche mit zitierfaehigen Quellen.
+**Status:** next.
+
+**Ziel:** Robuste Volltext- und Tag-Suche mit zitierfaehigen Quellen auf Basis der stabilen Paket-5-Read-API.
+
+### Vorbedingungen
+
+- M3 nutzt dokumentierte Read-Endpunkte und contract-critical Felder.
+- M3 greift nicht direkt auf Parser-Interna oder freie Chunk-Metadaten zu.
+- Chunks werden ueber `chunk_id`, `position` und `source_anchor` referenziert.
+- Duplicate-Dokumente sind DB-seitig verhindert.
+- Parser-/OCR-Fehler sind sichtbar.
 
 ### Tasks
 
-- PostgreSQL-Fulltext-Suche auf Chunks.
-- Suche ueber Tags und Kategorien.
-- Rankinglogik fuer Volltexttreffer.
+- Such-Contract fuer M3 definieren.
+- PostgreSQL-Fulltext-Suche auf Chunks implementieren.
+- Suche ueber Tags und Kategorien implementieren.
+- Rankinglogik fuer Volltexttreffer implementieren.
 - Quellenanker im Suchergebnis ausgeben.
 - Such-API bauen.
-- Frontend-Suchseite bauen.
 - Tests fuer Ranking, Filter und Quellenanker.
+- Optional: kompatiblen `/api/v1/documents`-Alias vor M3-Clientbindung einfuehren.
 
 ### Akzeptanzkriterien
 
 - Suche findet Inhalte ueber Markdown/Chunks.
 - Tagfilter funktionieren.
-- Treffer enthalten Dokument, Version, Chunk und Quellenanker.
-- Tabelleninhalte sind durchsuchbar.
+- Treffer enthalten Dokument, Version, Chunk und normalisierten Quellenanker.
+- Tabelleninhalte sind durchsuchbar, soweit sie als Markdown/Chunks extrahiert wurden.
+- Suche indexiert keine Dokumente mit `failed`, `pending` oder OCR-pflichtigem Fehlerzustand.
 
 ---
 
 ## M4 - Chat mit Wissensbasisbezug
+
+**Status:** missing.
 
 **Ziel:** Chat beantwortet Fragen zielgerichtet, nutzt Trefferkontext, zitiert bei Dokumentbezug und kennzeichnet allgemeine Antworten.
 
@@ -278,33 +402,35 @@ PostgreSQL bleibt zentrale Persistenz:
 
 ### Akzeptanzkriterien
 
-- Falsche Antworten werden staerker vermieden als Antwortluecken.
 - Bei Dokumentbezug werden Quellen geliefert.
 - Ohne passende Quelle wird der Status transparent gekennzeichnet.
 - Vergleich mehrerer Dokumente ist moeglich.
+- Allgemeine Antworten sind klar als nicht aus der Wissensbasis gekennzeichnet.
 
 ---
 
 ## M5 - Analyse, Merge, Refine und Commit
 
+**Status:** missing.
+
 **Ziel:** Dokumente vergleichen, konsolidieren, bearbeiten, freigeben und als neues Dokument committen.
 
 ### Tasks
 
-- Analysegruppen modellieren.
+- Analysegruppen fachlich nutzbar machen.
 - Dokumentauswahl fuer Analyse.
 - Merge erzeugt konsolidierte Zusammenfassung.
 - Refine erlaubt Ton, Struktur, Detailgrad, Quellengewichtung, Inhalte und Tags.
 - UI fuer Quellen-/Abschnittsabwahl.
 - Freigabeschritt vor Commit.
 - Commit erzeugt neues Dokument mit Version 1.
-- Commit erzeugt Chunks, Tags und Quellenmetadata.
+- Commit erzeugt Chunks, Tags und Quellenmetadaten.
 - Tests fuer Merge, Refine, Commit und Rollback.
 
 ### Akzeptanzkriterien
 
-- Kein Analyseergebnis wird ohne Freigabe gespeichert.
-- Nutzer kann Quellen/Abschnitte vor Commit abwählen.
+- Kein Analyseergebnis wird ohne Freigabe als Wissensdokument gespeichert.
+- Nutzer kann Quellen/Abschnitte vor Commit abwaehlen.
 - Commit erzeugt immer ein neues Dokument.
 - Quellenbezug bleibt nachvollziehbar.
 
@@ -312,7 +438,9 @@ PostgreSQL bleibt zentrale Persistenz:
 
 ## M6 - Backup, Restore-Doku und Betriebsgrundlage
 
-**Ziel:** Produktionsnaher Betrieb fuer remote PostgreSQL mit automatisiertem Backup und Healthcheck.
+**Status:** missing.
+
+**Ziel:** Produktionsnaher Betrieb fuer PostgreSQL mit automatisiertem Backup und Healthcheck.
 
 ### Tasks
 
@@ -329,91 +457,42 @@ PostgreSQL bleibt zentrale Persistenz:
 - Backup laeuft automatisiert.
 - Restore ist manuell dokumentiert und einmal geprueft.
 - Healthcheck erkennt DB-Ausfall.
-- Betrieb ist ohne Docker Compose startbar.
+- Betrieb ist ohne manuelle Ad-hoc-Schritte nachvollziehbar.
 
 ---
 
-## 6. KI-Werkzeug-Arbeitsteilung
+## 7. Naechste sequenzielle Schritte
 
-| Werkzeug | Rolle | Darf entscheiden | Darf nicht entscheiden |
-|---|---|---|---|
-| Claude Cowork | Architektur, ADRs, Refactoring, Implementierung | Architekturvorschlaege, technische Trade-offs | Scope ohne Freigabe erweitern |
-| Claude Studio | GUI, Frontend-Logik, UI-Komponenten | UI-Struktur innerhalb Task-Kontrakt | Backend, DB, Architektur |
-| Codex | Groessere Features nach Task-Kontrakt | Umsetzung innerhalb Akzeptanzkriterien | Architektur aendern |
-| GitHub Copilot | Inline-Code, Boilerplate, Tests | lokale Codevorschlaege | Architekturentscheidungen |
-
----
-
-## 7. Standard-Task-Prompt-Format
-
-Jeder Task-Prompt muss enthalten:
-
-1. Ziel
-2. Kontextdateien
-3. Nicht aendern
-4. Akzeptanzkriterien
-5. Outputformat
-6. Tests
-7. Analyse zuerst, Code danach
-8. Tokenlimit/Dateigrenzen
+1. Paket-5-Aenderungen committen.
+2. Optionalen `/api/v1/documents`-Alias implementieren, falls M3 direkt versionierte Pfade verwenden soll.
+3. PostgreSQL-Integrationstests fuer Paket-5-Read-API in CI oder lokalem Standardlauf absichern.
+4. M3 Such-Contract definieren.
+5. PostgreSQL-Fulltext-Suche auf Chunks implementieren.
+6. Such-API mit Quellenanker-Responses bauen.
+7. Ranking- und Filtertests ergaenzen.
+8. Danach M4 Chat auf Retrieval-Ergebnisse aufsetzen.
 
 ---
 
-## 8. Tokenstrategie
-
-- Prompts pro Task, nicht pro gesamtem Meilenstein.
-- Kontext nur dateibasiert liefern.
-- Keine kompletten Projektbaumausgaben, nur relevante Dateien.
-- Jeder KI-Schritt startet mit kurzer Analyse.
-- Umsetzung erst nach Analyse.
-- Output-Vertrag erzwingt kompakte Ergebnisse.
-- Wiederverwendbare Prompt-Schablonen nutzen.
-- Review nur pro Meilenstein, nicht pro Task.
-- Codex bekommt konkrete Patch-Aufgaben mit Akzeptanzkriterien.
-- Claude Studio bekommt UI-Aufgaben ohne Backend-Kontext.
-
----
-
-## 9. Risiken und Gegenmassnahmen
+## 8. Risiken und Gegenmassnahmen
 
 | Risiko | Auswirkung | Gegenmassnahme |
 |---|---|---|
-| OCR-Qualitaet schlecht | Falsche Inhalte in Suche/Chat | OCR-Confidence speichern, Review-Marker setzen |
-| KI-Normalisierung veraendert Inhalt | Vertrauensverlust | Normalizer darf strukturieren, nicht interpretieren; Validierung und Diff |
-| Keine Originaldatei gespeichert | Reimport erschwert | Hash, Dateiname, Parsermetadata und Markdown-Version speichern |
-| Allgemeiner Chat halluziniert | Falsche Antworten | Kennzeichnung: nicht aus Wissensbasis; Quellenpflicht bei Dokumentbezug |
-| Remote-DB-Latenz | Langsame Suche/Importe | Pooling, Indizes, Batch-Import, asynchrone Jobs |
-| 15 GB MVP | Lange Imports und Backups | Job-Queue, Statusmodell, inkrementelle Verarbeitung |
-| Mehrbenutzer spaeter schwer nachruestbar | Datenmodellbruch | Workspace/User-Felder ab M1 vorbereiten |
-| node-pg-migrate passt schlecht zu FastAPI | Toolbruch | Frueh entscheiden: node-pg-migrate behalten oder Alembic wechseln |
+| OCR fehlt | gescannte PDFs sind fuer Suche/Chat nicht nutzbar | `OCR_REQUIRED` sichtbar halten, OCR als eigenes Paket planen |
+| Parser-Qualitaet uneinheitlich | schlechte Chunks oder Quellenanker | Parser-Metriken und Format-spezifische Tests ergaenzen |
+| Quellenpositionen unvollstaendig | Zitate koennen grob bleiben | `source_anchor` weiter anreichern, Legacy sauber kennzeichnen |
+| `/api/v1/documents` Alias fehlt | M3 koennte spaeter auf unversionierten Pfad koppeln | Alias vor M3-Clientbindung implementieren |
+| Import-Persistenz nutzt direkten `psycopg` | uneinheitliche DB-Schicht | nach Paket 5 in Repository-/Session-Struktur ueberfuehren |
+| PostgreSQL-Tests optional | DB-spezifische Fehler koennen unbemerkt bleiben | `TEST_DATABASE_URL` in CI setzen |
+| Allgemeiner Chat halluziniert | falsche Antworten | M4 erst nach M3, Quellenpflicht und Antwortstatus erzwingen |
+| Remote-DB-Latenz | langsame Suche/Importe | Indizes, Projektionen, Pagination und Batch-Strategien |
 
 ---
 
-## 10. Offene Architekturentscheidung
+## 9. Referenzdokumente
 
-### Migrationstool
-
-Aktuelle Vorgabe: SQL direkt + FastAPI + node-pg-migrate.  
-Problem: node-pg-migrate fuehrt Node-Tooling ein, obwohl Backend FastAPI ist.
-
-**Empfohlene Entscheidung:** Alembic pruefen und wahrscheinlich verwenden, wenn kein bestehender Node-Grund vorhanden ist.
-
-**Entscheidungsregel:**
-
-- Wenn Repo bereits Node-Migrationsstruktur hat: node-pg-migrate behalten.
-- Wenn echter Neubeginn: Alembic verwenden.
-
----
-
-## 11. Naechste sequenzielle Schritte
-
-1. M0 abschliessen: ADRs, Repo-Struktur, Task-Kontrakt.
-2. Migrationstool final entscheiden.
-3. M1 DB-Schema implementieren.
-4. M2 Importpipeline minimal vertikal bauen: TXT/MD zuerst.
-5. DOC/PDF/OCR ergaenzen.
-6. M3 Suche bauen.
-7. M4 Chat bauen.
-8. M5 Analyse bauen.
-9. M6 Backup/Healthcheck bauen.
-10. Meilenstein-Review ausfuehren.
+- [Projektstatus](docs/status.md)
+- [Datenmodell V1](docs/data-model.md)
+- [V1 Dokument-API Contract](docs/api/v1-document-api-contract.md)
+- [Definition of Done: Paket 5](docs/paket-5-definition-of-done.md)
+- [ADR: Dokument-Read-API und Datenkonsistenz vor Retrieval](docs/adr/0003-document-read-api-before-retrieval.md)
