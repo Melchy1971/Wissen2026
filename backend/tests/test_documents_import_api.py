@@ -8,7 +8,7 @@ def test_import_rejects_unsupported_file_type() -> None:
 
     response = client.post(
         "/documents/import",
-        files={"file": ("scan.pdf", b"%PDF-1.7", "application/pdf")},
+        files={"file": ("scan.rtf", b"{\\rtf1 unsupported}", "application/rtf")},
     )
 
     assert response.status_code == 415

@@ -1,15 +1,21 @@
 from pathlib import Path
-from typing import Literal
-from uuid import uuid4
+from typing import Annotated, Iterator, Literal
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
-from psycopg.types.json import Jsonb
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
 from app.core.config import settings
-from app.core.database import DatabaseConfigurationError, get_connection
+from app.core.database import DatabaseConfigurationError
+from app.db.session import get_session
 from app.models.import_models import ImportRequest
-from app.services.chunking_service import MarkdownChunkingService
+from app.schemas.documents import (
+    DocumentChunkPreview,
+    DocumentDetail,
+    DocumentListItem,
+    DocumentVersionSummary,
+)
+from app.services.documents.import_persistence_service import DocumentImportPersistenceService
+from app.services.documents.read_service import DocumentNotFoundError, DocumentReadService
 from app.services.import_service import ImportService
 from app.services.markdown_normalizer import DeterministicMarkdownNormalizer
 from app.services.parser_service import DocParser, DocxParser, MarkdownParser, PdfParser, StaticParserSelector, TextParser
@@ -35,6 +41,67 @@ def build_import_service() -> ImportService:
     )
 
 
+def get_document_read_service() -> Iterator[DocumentReadService]:
+    try:
+        for session in get_session():
+            yield DocumentReadService.from_session(session)
+    except DatabaseConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+@router.get("", response_model=list[DocumentListItem])
+def list_documents(
+    workspace_id: Annotated[str, Query(min_length=1)],
+    service: Annotated[DocumentReadService, Depends(get_document_read_service)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> list[DocumentListItem]:
+    try:
+        return service.get_documents(workspace_id=workspace_id, limit=limit, offset=offset)
+    except DatabaseConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+@router.get("/{document_id}", response_model=DocumentDetail)
+def get_document(
+    document_id: str,
+    service: Annotated[DocumentReadService, Depends(get_document_read_service)],
+) -> DocumentDetail:
+    try:
+        return service.get_document_detail(document_id)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found") from exc
+    except DatabaseConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+@router.get("/{document_id}/versions", response_model=list[DocumentVersionSummary])
+def list_document_versions(
+    document_id: str,
+    service: Annotated[DocumentReadService, Depends(get_document_read_service)],
+) -> list[DocumentVersionSummary]:
+    try:
+        return service.get_versions(document_id)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found") from exc
+    except DatabaseConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+@router.get("/{document_id}/chunks", response_model=list[DocumentChunkPreview])
+def list_document_chunks(
+    document_id: str,
+    service: Annotated[DocumentReadService, Depends(get_document_read_service)],
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+) -> list[DocumentChunkPreview]:
+    try:
+        return service.get_chunks(document_id, limit=limit)
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found") from exc
+    except DatabaseConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
 @router.post("/import", response_model=ImportDocumentResponse)
 async def import_document(file: UploadFile = File(...)) -> ImportDocumentResponse:
     filename = file.filename or "untitled"
@@ -46,140 +113,28 @@ async def import_document(file: UploadFile = File(...)) -> ImportDocumentRespons
     if not import_result.success or import_result.document is None:
         detail = import_result.errors[0].message if import_result.errors else "Import failed"
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=detail)
+    if import_result.source_content_hash is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Import did not produce a content hash")
 
     title = title_from_filename(filename)
-    chunks = MarkdownChunkingService().chunk(
-        import_result.document.normalized_markdown,
-        document_version_id="pending",
-    )
-
     try:
-        with get_connection() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    select d.id, d.current_version_id, d.title, count(c.id)
-                    from documents d
-                    left join document_chunks c on c.document_id = d.id
-                    where d.workspace_id = %s and d.content_hash = %s
-                    group by d.id, d.current_version_id, d.title
-                    order by d.created_at asc
-                    limit 1
-                    """,
-                    (settings.default_workspace_id, import_result.source_content_hash),
-                )
-                existing = cursor.fetchone()
-                if existing is not None:
-                    return ImportDocumentResponse(
-                        document_id=str(existing[0]),
-                        version_id=str(existing[1]) if existing[1] is not None else None,
-                        title=existing[2],
-                        chunk_count=existing[3],
-                        duplicate_status="duplicate_existing",
-                    )
-
-                document_id = str(uuid4())
-                version_id = str(uuid4())
-                cursor.execute(
-                    """
-                    insert into documents (
-                        id,
-                        workspace_id,
-                        owner_user_id,
-                        title,
-                        source_type,
-                        mime_type,
-                        content_hash
-                    )
-                    values (%s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        document_id,
-                        settings.default_workspace_id,
-                        settings.default_user_id,
-                        title,
-                        "upload",
-                        mime_type,
-                        import_result.source_content_hash,
-                    ),
-                )
-                cursor.execute(
-                    """
-                    insert into document_versions (
-                        id,
-                        document_id,
-                        version_number,
-                        normalized_markdown,
-                        markdown_hash,
-                        parser_version,
-                        ocr_used,
-                        ki_provider,
-                        ki_model,
-                        metadata
-                    )
-                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        version_id,
-                        document_id,
-                        1,
-                        import_result.document.normalized_markdown,
-                        import_result.document.markdown_hash,
-                        import_result.document.parser_version or "unknown",
-                        import_result.document.ocr_used,
-                        import_result.document.ki_provider,
-                        import_result.document.ki_model,
-                        Jsonb(import_result.document.metadata),
-                    ),
-                )
-                cursor.execute(
-                    "update documents set current_version_id = %s, updated_at = now() where id = %s",
-                    (version_id, document_id),
-                )
-
-                version_chunks = MarkdownChunkingService().chunk(
-                    import_result.document.normalized_markdown,
-                    document_version_id=version_id,
-                )
-                for chunk in version_chunks:
-                    cursor.execute(
-                        """
-                        insert into document_chunks (
-                            id,
-                            document_id,
-                            document_version_id,
-                            chunk_index,
-                            heading_path,
-                            anchor,
-                            content,
-                            content_hash,
-                            token_estimate,
-                            metadata
-                        )
-                        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        """,
-                        (
-                            str(uuid4()),
-                            document_id,
-                            version_id,
-                            chunk.chunk_index,
-                            Jsonb(chunk.heading_path),
-                            chunk.anchor,
-                            chunk.content,
-                            chunk.content_hash,
-                            chunk.token_estimate,
-                            Jsonb(chunk.metadata),
-                        ),
-                    )
+        persisted = DocumentImportPersistenceService().persist_import(
+            workspace_id=settings.default_workspace_id,
+            owner_user_id=settings.default_user_id,
+            title=title,
+            mime_type=mime_type,
+            content_hash=import_result.source_content_hash,
+            document=import_result.document,
+        )
     except DatabaseConfigurationError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     return ImportDocumentResponse(
-        document_id=document_id,
-        version_id=version_id,
-        title=title,
-        chunk_count=len(chunks),
-        duplicate_status="created",
+        document_id=persisted.document_id,
+        version_id=persisted.version_id,
+        title=persisted.title,
+        chunk_count=persisted.chunk_count,
+        duplicate_status="duplicate_existing" if persisted.duplicate_existing else "created",
     )
 
 

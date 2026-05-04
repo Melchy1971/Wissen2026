@@ -1,100 +1,147 @@
 # Projektstatus
 
-## Abgeschlossen
+Stand: 2026-05-04
 
-Paket 1 ist abgeschlossen.
+## Ground Truth = Code, nicht Dokumentation
 
-- Repo-Struktur geprueft und dokumentarisch geschaerft.
-- Tech-Stack-ADR fuer V1 erstellt.
-- V1-Scope-ADR fuer Grenzen, Nicht-Ziele und vorbereitete Mehrbenutzerfaehigkeit erstellt.
+Diese Datei beschreibt den aktuellen Stand nach bestem Abgleich mit dem Code.
+Bei Widerspruechen gilt immer der Code als Ground Truth, nicht diese Dokumentation.
 
-Paket 2 ist abgeschlossen.
+Vor Statusaenderungen sollen mindestens die betroffenen Module und Tests geprueft werden:
 
-- FastAPI Backend-Grundgeruest erstellt.
-- Konfiguration ueber Umgebungsvariablen vorbereitet.
-- Healthchecks fuer App und DB-Verbindung ergaenzt.
-- Alembic im Backend-Kontext initialisiert.
-- Minimale pytest-Testbasis fuer Healthchecks angelegt.
+- Backend-Code unter `backend/app`
+- Alembic-Migrationen unter `backend/migrations/versions`
+- Tests unter `backend/tests`
 
-Paket 3 ist abgeschlossen.
+## Implemented
 
-- Initiale M1-Datenbankmigrationen erstellt.
-- `workspaces` und `users` fuer spaetere Mehrbenutzerfaehigkeit vorbereitet.
-- Dokumentbasis mit `documents` und `document_versions` versioniert.
-- `document_chunks` mit zitierfaehigen Quellenankern ergaenzt.
-- Kategorien, Tags und additive Tag-Zuordnung modelliert.
-- Chat- und Analyse-Grundtabellen fuer spaetere Funktionen vorbereitet.
-- Migrationstests fuer Struktur, Revisionen und optionale PostgreSQL-Testdatenbank ergaenzt.
+### Backend-Grundlage
 
-Paket 4 ist abgeschlossen.
+- FastAPI-App mit Healthchecks.
+- Konfiguration ueber Umgebungsvariablen.
+- Alembic-Setup im Backend-Kontext.
+- pytest-Testbasis mit Unit- und optionalen PostgreSQL-Integrationstests.
 
-- Import-Service-Schnittstellen fuer Parser, OCR, KI-Provider und Normalisierung definiert.
-- TXT- und Markdown-Parser als minimaler vertikaler Importpfad implementiert.
-- Deterministischer Markdown-Normalizer ohne inhaltliche Interpretation implementiert.
-- Chunking-Service mit Quellenankern fuer normalisierten Markdown implementiert.
-- Minimaler Import-Endpunkt `POST /documents/import` fuer `.txt` und `.md` ergaenzt.
-- Persistenz fuer Dokument, Dokumentversion und Chunks im Importpfad umgesetzt.
+### Datenmodell und Migrationen
 
-## Neue Migrationen in Paket 3
+- `workspaces` und `users` als vorbereitete Mehrbenutzer-Basis.
+- `documents` und `document_versions` fuer versionierte Dokumente.
+- `document_chunks` fuer chunkbasierte Weiterverarbeitung und Quellenanker.
+- Kategorien, Tags und additive Tag-Zuordnung.
+- Chat- und Analyse-Grundtabellen.
+- Harte DB-Deduplizierung fuer Dokumentimporte ueber Unique Constraint auf `(workspace_id, content_hash)`.
+
+Relevante Migrationen:
 
 - `backend/migrations/versions/20260430_0001_initial_document_schema.py`
 - `backend/migrations/versions/20260430_0002_document_chunks.py`
 - `backend/migrations/versions/20260430_0003_categories_tags.py`
 - `backend/migrations/versions/20260430_0004_chat_analysis.py`
+- `backend/migrations/versions/20260504_0005_document_content_hash_unique.py`
 
-## Weitere neue und geaenderte Dateien in Paket 3
+### Import-Pipeline
 
-- `backend/alembic.ini`
-- `backend/tests/README.md`
-- `backend/tests/integration/test_migrations.py`
-- `docs/data-model.md`
-- `docs/status.md`
-- `backend/README.md`
+- Import-Service fuer Parser-Auswahl, Normalisierung und Import-Ergebnis.
+- Deterministischer Markdown-Normalizer ohne inhaltliche Interpretation.
+- Chunking-Service fuer normalisierten Markdown.
+- Persistenz-Service fuer Importergebnisse mit Dokument, Version und Chunks.
+- Duplicate Handling im Service Layer:
+  - Vorab-Pruefung auf vorhandenes Dokument.
+  - DB-Unique-Constraint als harte Sicherung.
+  - `IntegrityError` auf den Content-Hash-Constraint wird abgefangen.
+  - Bei Konflikt wird deterministisch das bestehende Dokument zurueckgegeben.
 
-## Neue und geaenderte Module in Paket 4
+### Parser
 
-- `backend/app/api/documents.py`
-- `backend/app/main.py`
-- `backend/app/models/import_models.py`
-- `backend/app/services/chunking_service.py`
-- `backend/app/services/import_service.py`
-- `backend/app/services/ki_provider.py`
-- `backend/app/services/markdown_normalizer.py`
-- `backend/app/services/ocr_service.py`
-- `backend/app/services/parser_service.py`
-- `backend/app/services/README.md`
-- `backend/requirements.txt`
-- `backend/tests/integration/test_documents_import.py`
-- `backend/tests/test_documents_import_api.py`
-- `backend/tests/unit/test_chunking_service.py`
-- `backend/tests/unit/test_markdown_normalizer.py`
-- `backend/tests/unit/test_text_markdown_parsers.py`
-- `backend/tests/README.md`
-- `docs/import-pipeline.md`
-- `docs/data-model.md`
-- `docs/status.md`
+- TXT: implementiert.
+  - `TextParser`
+  - MIME: `text/plain`
+  - Dekodierung: `utf-8-sig`, `utf-8`, Fallback `cp1252`, danach `latin-1`
 
-## Offen
+- MD: implementiert.
+  - `MarkdownParser`
+  - MIME: `text/markdown`, `text/x-markdown`, `text/md`
+  - Inhalt wird als Markdown uebernommen und danach normalisiert.
 
-- Die Migrationen wurden lokal per SQL-Rendering und Tests ohne DB geprueft; echte PostgreSQL-Ausfuehrung benoetigt `TEST_DATABASE_URL` oder `DATABASE_URL`.
-- Mehrbenutzerfaehigkeit ist nur vorbereitet. Es gibt keine Authentifizierung, keine Rollen und keine Rechtepruefung.
-- UUID-Erzeugung fuer neue Fachdaten muss spaeter durch Anwendung oder eine gesonderte DB-Strategie erfolgen.
-- `updated_at` wird noch nicht automatisch per Trigger gepflegt.
-- Konsistenzregeln fuer einige optionale Quellenbezuege muessen spaeter in Service-Logik oder gezielten Constraints geschaerft werden.
-- Import unterstuetzt aktuell nur `.txt` und `.md`; DOCX, PDF und OCR sind vorbereitet, aber nicht implementiert.
-- Duplikaterkennung im Importpfad ist aktuell app-seitig ueber `content_hash`, nicht per DB-Unique-Constraint abgesichert.
-- Import-Integrationstests gegen PostgreSQL laufen nur mit `TEST_DATABASE_URL`.
-- ADR-Nummerierung ist doppelt belegt, da aeltere Kurzfassungen neben den ausfuehrlichen V1-ADRs existieren.
+- DOCX: implementiert.
+  - `DocxParser`
+  - MIME: `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+  - Extrahiert Paragraphen, Headings, Listenhinweise und einfache Tabellen nach Markdown.
 
-## Naechstes Paket
+- PDF ohne OCR: implementiert.
+  - `PdfParser`
+  - MIME: `application/pdf`
+  - Nutzt `pypdf` zur Textextraktion.
+  - Erzeugt Page-Kommentare im Markdown.
+  - Markiert OCR-Bedarf ueber `ocr_required`, fuehrt aber kein OCR aus.
 
-Paket 5 ist bereit.
+- DOC: implementiert mit externer Abhaengigkeit.
+  - `DocParser`
+  - MIME: `application/msword`
+  - Konvertiert per LibreOffice headless nach DOCX und nutzt danach `DocxParser`.
+  - Ohne `soffice`/`libreoffice` auf dem PATH schlaegt der Parser kontrolliert fehl.
 
-Empfohlener Fokus:
+### Dokument-Read-API
 
-- Dokumentlisten- und Detail-API fuer importierte Dokumente vorbereiten.
-- Chunks und Quellenanker lesbar machen, ohne Chat- oder Rankinglogik einzufuehren.
-- Duplikat- und Fehlerverhalten weiter schaerfen.
+- `GET /documents`
+  - Filter `workspace_id`
+  - Pagination via `limit` und `offset`
+  - Sortierung `created_at DESC`
+  - Response mit `latest_version_id`
+
+- `GET /documents/{document_id}`
+  - Dokument-Metadaten plus `latest_version`
+  - 404 bei nicht vorhandenem Dokument
+
+- `GET /documents/{document_id}/versions`
+  - Versionen chronologisch absteigend
+  - Projektion auf API-Felder
+
+- `GET /documents/{document_id}/chunks`
+  - Nur Chunks der `latest_version`
+  - Sortierung `position ASC`
+  - Optionales `limit`
+  - Projektion statt Full ORM Object
+  - `text_preview` wird serverseitig erzeugt
+  - `source_anchor` wird strukturiert als `anchor`, `page`, `paragraph`, `offset` ausgegeben, soweit Metadaten vorhanden sind.
+
+## Partial
+
+- PostgreSQL-Integrationstests sind vorhanden, laufen aber nur mit gesetzter `TEST_DATABASE_URL`.
+- PDF-Import erkennt OCR-Bedarf, besitzt aber noch keine OCR-Ausfuehrung.
+- DOC-Import funktioniert nur, wenn LibreOffice lokal verfuegbar ist.
+- Parser-Metadaten sind vorhanden, aber Quellenpositionen sind nur teilweise strukturiert. Chunks koennen `page`, `paragraph` und `offset` aus Metadaten ausgeben, die aktuellen Parser fuellen diese Felder aber noch nicht konsistent.
+- Mehrbenutzerfaehigkeit ist datenmodellseitig vorbereitet, aber ohne Authentifizierung, Rollen und Rechtepruefung.
+- `updated_at` wird teilweise explizit gesetzt, aber nicht generell per DB-Trigger oder ORM-Event gepflegt.
+
+## Missing
+
+- OCR-Engine fuer gescannte PDFs oder Bilder.
+- Authentifizierung und Autorisierung.
+- Benutzer- und Workspace-Verwaltung als echte Produktfunktion.
+- Vollstaendige Quellenpositions-Erfassung pro Chunk.
+- Ranking, Suche, Chat- und Analyse-Fachlogik oberhalb der vorbereiteten Tabellen.
+- Einheitliche Parser-Qualitaetsmetriken und Parser-Confidence.
+- Produktionsreife Fehlerklassifikation fuer alle Importpfade.
+
+## Known Limitations
+
+- OCR fehlt. PDFs mit wenig oder keinem extrahierbaren Text werden nur mit `ocr_required=True` markiert.
+- Parser-Qualitaet ist uneinheitlich:
+  - TXT/MD sind robust, aber semantisch flach.
+  - DOCX deckt grundlegende Paragraphen, Headings, Listen und Tabellen ab, aber nicht alle Word-Layout- und Formatierungsdetails.
+  - PDF-Textextraktion haengt stark von der PDF-Struktur ab.
+  - DOC haengt von LibreOffice und dessen Konvertierungsqualitaet ab.
+- Duplicate Race Condition ist im aktuellen Code adressiert, setzt aber voraus, dass die Migration `20260504_0005_document_content_hash_unique.py` angewendet wurde.
+- Integrationstests mit echter Datenbank werden ohne `TEST_DATABASE_URL` uebersprungen.
+- ADR-Nummerierung ist historisch doppelt belegt, weil aeltere Kurzfassungen neben den ausfuehrlichen V1-ADRs existieren.
+
+## Naechster sinnvoller Fokus
+
+- OCR-Implementierung oder klare OCR-Auslagerungsentscheidung.
+- Parser-Qualitaet und Quellenpositions-Metadaten verbessern.
+- Read-API mit realen Integrationstests gegen PostgreSQL absichern.
+- Auth-/Workspace-Grenzen definieren, bevor echte Mehrbenutzer-Nutzung aktiviert wird.
 
 ## ADR-Startpunkte
 

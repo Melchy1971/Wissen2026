@@ -3,6 +3,17 @@ name = "wissensbasis-backend"
 version = "0.1.0"
 description = "FastAPI backend fuer Wissensbasis V1"
 requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "psycopg[binary,pool]",
+    "sqlalchemy",
+    "alembic",
+    "python-multipart",
+    "python-docx",
+    "pypdf",
+]
 
 [tool.ruff]
 line-length = 100

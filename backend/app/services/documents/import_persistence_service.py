@@ -1,0 +1,216 @@
+from dataclasses import dataclass
+from uuid import uuid4
+
+import psycopg
+from psycopg import IntegrityError
+from psycopg.types.json import Jsonb
+
+from app.core.database import get_connection
+from app.models.import_models import NormalizedDocument
+from app.services.chunking_service import MarkdownChunkingService
+
+
+DOCUMENT_CONTENT_HASH_UNIQUE_CONSTRAINT = "uq_documents_workspace_content_hash"
+
+
+@dataclass(frozen=True)
+class PersistedImportDocument:
+    document_id: str
+    version_id: str | None
+    title: str
+    chunk_count: int
+    duplicate_existing: bool
+
+
+class DocumentImportPersistenceService:
+    def __init__(self, chunking_service: MarkdownChunkingService | None = None) -> None:
+        self._chunking_service = chunking_service or MarkdownChunkingService()
+
+    def persist_import(
+        self,
+        *,
+        workspace_id: str,
+        owner_user_id: str,
+        title: str,
+        mime_type: str,
+        content_hash: str,
+        document: NormalizedDocument,
+    ) -> PersistedImportDocument:
+        with get_connection() as connection:
+            existing = self._fetch_existing(connection, workspace_id=workspace_id, content_hash=content_hash)
+            if existing is not None:
+                return existing
+
+            try:
+                return self._insert_document(
+                    connection,
+                    workspace_id=workspace_id,
+                    owner_user_id=owner_user_id,
+                    title=title,
+                    mime_type=mime_type,
+                    content_hash=content_hash,
+                    document=document,
+                )
+            except IntegrityError as exc:
+                if not self._is_content_hash_conflict(exc):
+                    raise
+                connection.rollback()
+                existing = self._fetch_existing(
+                    connection,
+                    workspace_id=workspace_id,
+                    content_hash=content_hash,
+                )
+                if existing is None:
+                    raise
+                return existing
+
+    def _insert_document(
+        self,
+        connection: psycopg.Connection,
+        *,
+        workspace_id: str,
+        owner_user_id: str,
+        title: str,
+        mime_type: str,
+        content_hash: str,
+        document: NormalizedDocument,
+    ) -> PersistedImportDocument:
+        document_id = str(uuid4())
+        version_id = str(uuid4())
+        version_chunks = self._chunking_service.chunk(
+            document.normalized_markdown,
+            document_version_id=version_id,
+        )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                insert into documents (
+                    id,
+                    workspace_id,
+                    owner_user_id,
+                    title,
+                    source_type,
+                    mime_type,
+                    content_hash
+                )
+                values (%s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    document_id,
+                    workspace_id,
+                    owner_user_id,
+                    title,
+                    "upload",
+                    mime_type,
+                    content_hash,
+                ),
+            )
+            cursor.execute(
+                """
+                insert into document_versions (
+                    id,
+                    document_id,
+                    version_number,
+                    normalized_markdown,
+                    markdown_hash,
+                    parser_version,
+                    ocr_used,
+                    ki_provider,
+                    ki_model,
+                    metadata
+                )
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    version_id,
+                    document_id,
+                    1,
+                    document.normalized_markdown,
+                    document.markdown_hash,
+                    document.parser_version or "unknown",
+                    document.ocr_used,
+                    document.ki_provider,
+                    document.ki_model,
+                    Jsonb(document.metadata),
+                ),
+            )
+            cursor.execute(
+                "update documents set current_version_id = %s, updated_at = now() where id = %s",
+                (version_id, document_id),
+            )
+
+            for chunk in version_chunks:
+                cursor.execute(
+                    """
+                    insert into document_chunks (
+                        id,
+                        document_id,
+                        document_version_id,
+                        chunk_index,
+                        heading_path,
+                        anchor,
+                        content,
+                        content_hash,
+                        token_estimate,
+                        metadata
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        str(uuid4()),
+                        document_id,
+                        version_id,
+                        chunk.chunk_index,
+                        Jsonb(chunk.heading_path),
+                        chunk.anchor,
+                        chunk.content,
+                        chunk.content_hash,
+                        chunk.token_estimate,
+                        Jsonb(chunk.metadata),
+                    ),
+                )
+
+        return PersistedImportDocument(
+            document_id=document_id,
+            version_id=version_id,
+            title=title,
+            chunk_count=len(version_chunks),
+            duplicate_existing=False,
+        )
+
+    def _fetch_existing(
+        self,
+        connection: psycopg.Connection,
+        *,
+        workspace_id: str,
+        content_hash: str,
+    ) -> PersistedImportDocument | None:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                select d.id, d.current_version_id, d.title, count(c.id)
+                from documents d
+                left join document_chunks c on c.document_id = d.id
+                where d.workspace_id = %s and d.content_hash = %s
+                group by d.id, d.current_version_id, d.title
+                order by d.created_at asc
+                limit 1
+                """,
+                (workspace_id, content_hash),
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            return None
+
+        return PersistedImportDocument(
+            document_id=str(row[0]),
+            version_id=str(row[1]) if row[1] is not None else None,
+            title=row[2],
+            chunk_count=row[3],
+            duplicate_existing=True,
+        )
+
+    def _is_content_hash_conflict(self, exc: IntegrityError) -> bool:
+        return getattr(exc.diag, "constraint_name", None) == DOCUMENT_CONTENT_HASH_UNIQUE_CONSTRAINT

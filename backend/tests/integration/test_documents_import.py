@@ -1,4 +1,6 @@
 import os
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
 
 import psycopg
 import pytest
@@ -7,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.core.config import settings
 from app.main import app
+from app.services.documents.import_persistence_service import DocumentImportPersistenceService
 from tests.integration.test_migrations import make_alembic_config, psycopg_url
 
 
@@ -104,5 +107,72 @@ def test_markdown_import_preserves_table_in_persisted_chunk(test_database_url, m
         assert len(rows) == 1
         assert "| Name | Wert |\n| --- | ---: |\n| Alpha | 42 |" in rows[0][0]
         assert rows[0][1].startswith(f"dv:{payload['version_id']}:c")
+    finally:
+        command.downgrade(config, "base")
+
+
+def test_parallel_duplicate_imports_create_single_document(test_database_url, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "database_url", test_database_url)
+    config = make_alembic_config()
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
+
+    original_fetch_existing = DocumentImportPersistenceService._fetch_existing
+    barrier = Barrier(2)
+    lock = Lock()
+    empty_fetch_count = 0
+
+    def wait_after_initial_empty_fetch(self, connection, *, workspace_id, content_hash):
+        nonlocal empty_fetch_count
+        existing = original_fetch_existing(
+            self,
+            connection,
+            workspace_id=workspace_id,
+            content_hash=content_hash,
+        )
+        if existing is None:
+            with lock:
+                empty_fetch_count += 1
+                should_wait = empty_fetch_count <= 2
+            if should_wait:
+                barrier.wait(timeout=10)
+        return existing
+
+    monkeypatch.setattr(
+        DocumentImportPersistenceService,
+        "_fetch_existing",
+        wait_after_initial_empty_fetch,
+    )
+
+    def post_document() -> dict:
+        client = TestClient(app)
+        response = client.post(
+            "/documents/import",
+            files={"file": ("race.txt", b"# Race\n\nSame content\n", "text/plain")},
+        )
+        assert response.status_code == 200
+        return response.json()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            payloads = list(executor.map(lambda _: post_document(), range(2)))
+
+        assert {payload["document_id"] for payload in payloads}
+        assert len({payload["document_id"] for payload in payloads}) == 1
+        assert sorted(payload["duplicate_status"] for payload in payloads) == [
+            "created",
+            "duplicate_existing",
+        ]
+
+        with psycopg.connect(psycopg_url(test_database_url)) as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("select count(*) from documents")
+                assert cursor.fetchone() == (1,)
+
+                cursor.execute("select count(*) from document_versions")
+                assert cursor.fetchone() == (1,)
+
+                cursor.execute("select count(*) from document_chunks")
+                assert cursor.fetchone() == (1,)
     finally:
         command.downgrade(config, "base")
