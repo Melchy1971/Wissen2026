@@ -76,3 +76,35 @@ def test_chunking_is_deterministic_and_hashes_content() -> None:
     assert left == right
     assert left[0].content_hash == hash_text(left[0].content)
     assert left[0].token_estimate == 3
+
+
+def test_chunking_adds_normalized_text_source_anchor() -> None:
+    markdown = "# A\n\nText\n"
+
+    chunk = MarkdownChunkingService().chunk(markdown, DOCUMENT_VERSION_ID)[0]
+
+    assert chunk.metadata["source_anchor"] == {
+        "type": "text",
+        "page": None,
+        "paragraph": None,
+        "char_start": 0,
+        "char_end": len("# A\n\nText"),
+    }
+
+
+def test_chunking_maps_pdf_page_source_anchor() -> None:
+    markdown = "<!-- page:3 -->\n\nPDF text\n"
+
+    chunk = MarkdownChunkingService().chunk(
+        markdown,
+        DOCUMENT_VERSION_ID,
+        source_anchor_type="pdf_page",
+    )[0]
+
+    assert chunk.metadata["source_anchor"] == {
+        "type": "pdf_page",
+        "page": 3,
+        "paragraph": None,
+        "char_start": 0,
+        "char_end": len("<!-- page:3 -->\n\nPDF text"),
+    }

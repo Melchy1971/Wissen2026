@@ -1,5 +1,5 @@
 # API-Dokumentation
 
-Platzhalter fuer API-Kontrakte, Request-/Response-Skizzen und spaetere Endpunktdokumentation.
+Dieses Verzeichnis enthaelt stabile API-Kontrakte.
 
-V1 bleibt bewusst knapp dokumentiert, damit die API zwischen Backend und Frontend klar getrennt entwickelt werden kann.
+- [V1 Dokument-API Contract](./v1-document-api-contract.md)

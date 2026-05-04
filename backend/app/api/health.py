@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter
 
 from app.core.config import settings
 from app.core.database import DatabaseConfigurationError, check_database_connection
+from app.core.errors import ServiceUnavailableApiError
 
 router = APIRouter(tags=["health"])
 
@@ -16,14 +17,8 @@ def database_health() -> dict[str, str]:
     try:
         check_database_connection()
     except DatabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+        raise ServiceUnavailableApiError(message=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database connection check failed",
-        ) from exc
+        raise ServiceUnavailableApiError(message="Database connection check failed") from exc
 
     return {"status": "ok"}

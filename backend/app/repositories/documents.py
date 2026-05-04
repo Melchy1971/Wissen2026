@@ -12,9 +12,13 @@ from app.models.documents import Chunk, Document, DocumentVersion
 class DocumentListRecord:
     id: str
     title: str
+    mime_type: str | None
     created_at: datetime
     updated_at: datetime
     latest_version_id: str | None
+    import_status: str
+    version_count: int
+    chunk_count: int
 
 
 @dataclass(frozen=True)
@@ -29,10 +33,20 @@ class DocumentDetailRecord:
     created_at: datetime
     updated_at: datetime
     latest_version_id: str | None
+    import_status: str
     version_id: str | None
     version_number: int | None
     version_created_at: datetime | None
     version_content_hash: str | None
+    parser_version: str | None
+    ocr_used: bool | None
+    ki_provider: str | None
+    ki_model: str | None
+    version_metadata: dict[str, Any] | None
+    chunk_count: int
+    total_chars: int
+    first_chunk_id: str | None
+    last_chunk_id: str | None
 
 
 @dataclass(frozen=True)
@@ -57,13 +71,41 @@ class DocumentRepository:
         self._session = session
 
     def get_documents(self, *, workspace_id: str, limit: int, offset: int) -> list[DocumentListRecord]:
+        version_counts = (
+            select(
+                DocumentVersion.document_id.label("document_id"),
+                func.count(DocumentVersion.id).label("version_count"),
+            )
+            .group_by(DocumentVersion.document_id)
+            .subquery()
+        )
+        latest_chunk_counts = (
+            select(
+                Chunk.document_id.label("document_id"),
+                Chunk.document_version_id.label("document_version_id"),
+                func.count(Chunk.id).label("chunk_count"),
+            )
+            .group_by(Chunk.document_id, Chunk.document_version_id)
+            .subquery()
+        )
+
         rows = self._session.execute(
             select(
                 Document.id,
                 Document.title,
+                Document.mime_type,
                 Document.created_at,
                 Document.updated_at,
                 Document.current_version_id.label("latest_version_id"),
+                Document.import_status,
+                func.coalesce(version_counts.c.version_count, 0).label("version_count"),
+                func.coalesce(latest_chunk_counts.c.chunk_count, 0).label("chunk_count"),
+            )
+            .outerjoin(version_counts, version_counts.c.document_id == Document.id)
+            .outerjoin(
+                latest_chunk_counts,
+                (latest_chunk_counts.c.document_id == Document.id)
+                & (latest_chunk_counts.c.document_version_id == Document.current_version_id),
             )
             .where(Document.workspace_id == workspace_id)
             .order_by(desc(Document.created_at))
@@ -75,14 +117,43 @@ class DocumentRepository:
             DocumentListRecord(
                 id=row.id,
                 title=row.title,
+                mime_type=row.mime_type,
                 created_at=row.created_at,
                 updated_at=row.updated_at,
                 latest_version_id=row.latest_version_id,
+                import_status=row.import_status,
+                version_count=row.version_count,
+                chunk_count=row.chunk_count,
             )
             for row in rows
         ]
 
     def get_document_detail(self, document_id: str) -> DocumentDetailRecord | None:
+        chunk_count = (
+            select(func.count(Chunk.id))
+            .where(Chunk.document_id == Document.id, Chunk.document_version_id == Document.current_version_id)
+            .scalar_subquery()
+        )
+        total_chars = (
+            select(func.coalesce(func.sum(func.length(Chunk.content)), 0))
+            .where(Chunk.document_id == Document.id, Chunk.document_version_id == Document.current_version_id)
+            .scalar_subquery()
+        )
+        first_chunk_id = (
+            select(Chunk.id)
+            .where(Chunk.document_id == Document.id, Chunk.document_version_id == Document.current_version_id)
+            .order_by(Chunk.chunk_index.asc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        last_chunk_id = (
+            select(Chunk.id)
+            .where(Chunk.document_id == Document.id, Chunk.document_version_id == Document.current_version_id)
+            .order_by(Chunk.chunk_index.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+
         row = self._session.execute(
             select(
                 Document.id,
@@ -95,10 +166,20 @@ class DocumentRepository:
                 Document.created_at,
                 Document.updated_at,
                 Document.current_version_id.label("latest_version_id"),
+                Document.import_status,
                 DocumentVersion.id.label("version_id"),
                 DocumentVersion.version_number,
                 DocumentVersion.created_at.label("version_created_at"),
                 DocumentVersion.markdown_hash.label("version_content_hash"),
+                DocumentVersion.parser_version,
+                DocumentVersion.ocr_used,
+                DocumentVersion.ki_provider,
+                DocumentVersion.ki_model,
+                DocumentVersion.metadata_,
+                chunk_count.label("chunk_count"),
+                total_chars.label("total_chars"),
+                first_chunk_id.label("first_chunk_id"),
+                last_chunk_id.label("last_chunk_id"),
             )
             .outerjoin(DocumentVersion, Document.current_version_id == DocumentVersion.id)
             .where(Document.id == document_id)
@@ -118,10 +199,20 @@ class DocumentRepository:
             created_at=row.created_at,
             updated_at=row.updated_at,
             latest_version_id=row.latest_version_id,
+            import_status=row.import_status,
             version_id=row.version_id,
             version_number=row.version_number,
             version_created_at=row.version_created_at,
             version_content_hash=row.version_content_hash,
+            parser_version=row.parser_version,
+            ocr_used=row.ocr_used,
+            ki_provider=row.ki_provider,
+            ki_model=row.ki_model,
+            version_metadata=row.metadata_,
+            chunk_count=row.chunk_count,
+            total_chars=row.total_chars,
+            first_chunk_id=row.first_chunk_id,
+            last_chunk_id=row.last_chunk_id,
         )
 
     def get_versions(self, document_id: str) -> list[DocumentVersionRecord]:

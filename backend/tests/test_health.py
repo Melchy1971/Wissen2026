@@ -22,4 +22,10 @@ def test_database_health_reports_missing_configuration(client, monkeypatch) -> N
     response = client.get("/health/db")
 
     assert response.status_code == 503
-    assert response.json() == {"detail": "DATABASE_URL is not configured"}
+    assert response.json() == {
+        "error": {
+            "code": "SERVICE_UNAVAILABLE",
+            "message": "DATABASE_URL is not configured",
+            "details": {},
+        }
+    }

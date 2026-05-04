@@ -41,6 +41,7 @@ def test_txt_import_persists_document_version_chunks_and_duplicate_status(
         assert payload["title"] == "notes"
         assert payload["chunk_count"] == 1
         assert payload["duplicate_status"] == "created"
+        assert payload["import_status"] == "chunked"
         assert payload["document_id"]
         assert payload["version_id"]
 
@@ -48,18 +49,18 @@ def test_txt_import_persists_document_version_chunks_and_duplicate_status(
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    select d.current_version_id, d.mime_type, v.normalized_markdown, count(c.id)
+                    select d.current_version_id, d.mime_type, d.import_status, v.normalized_markdown, count(c.id)
                     from documents d
                     join document_versions v on v.document_id = d.id
                     left join document_chunks c on c.document_version_id = v.id
                     where d.id = %s
-                    group by d.current_version_id, d.mime_type, v.normalized_markdown
+                    group by d.current_version_id, d.mime_type, d.import_status, v.normalized_markdown
                     """,
                     (payload["document_id"],),
                 )
                 row = cursor.fetchone()
 
-        assert row == (payload["version_id"], "text/plain", "# Notes\n\nHello world\n", 1)
+        assert row == (payload["version_id"], "text/plain", "chunked", "# Notes\n\nHello world\n", 1)
 
         duplicate_response = client.post("/documents/import", files=files)
 
@@ -69,6 +70,7 @@ def test_txt_import_persists_document_version_chunks_and_duplicate_status(
         assert duplicate_payload["version_id"] == payload["version_id"]
         assert duplicate_payload["chunk_count"] == 1
         assert duplicate_payload["duplicate_status"] == "duplicate_existing"
+        assert duplicate_payload["import_status"] == "duplicate"
     finally:
         command.downgrade(config, "base")
 

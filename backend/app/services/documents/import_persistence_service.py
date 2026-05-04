@@ -20,6 +20,7 @@ class PersistedImportDocument:
     title: str
     chunk_count: int
     duplicate_existing: bool
+    import_status: str
 
 
 class DocumentImportPersistenceService:
@@ -80,6 +81,7 @@ class DocumentImportPersistenceService:
         version_chunks = self._chunking_service.chunk(
             document.normalized_markdown,
             document_version_id=version_id,
+            source_anchor_type=source_anchor_type_for_document(document),
         )
 
         with connection.cursor() as cursor:
@@ -92,9 +94,10 @@ class DocumentImportPersistenceService:
                     title,
                     source_type,
                     mime_type,
-                    content_hash
+                    content_hash,
+                    import_status
                 )
-                values (%s, %s, %s, %s, %s, %s, %s)
+                values (%s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     document_id,
@@ -104,6 +107,7 @@ class DocumentImportPersistenceService:
                     "upload",
                     mime_type,
                     content_hash,
+                    "parsed",
                 ),
             )
             cursor.execute(
@@ -136,8 +140,8 @@ class DocumentImportPersistenceService:
                 ),
             )
             cursor.execute(
-                "update documents set current_version_id = %s, updated_at = now() where id = %s",
-                (version_id, document_id),
+                "update documents set current_version_id = %s, import_status = %s, updated_at = now() where id = %s",
+                (version_id, "chunked", document_id),
             )
 
             for chunk in version_chunks:
@@ -177,6 +181,7 @@ class DocumentImportPersistenceService:
             title=title,
             chunk_count=len(version_chunks),
             duplicate_existing=False,
+            import_status="chunked",
         )
 
     def _fetch_existing(
@@ -210,7 +215,23 @@ class DocumentImportPersistenceService:
             title=row[2],
             chunk_count=row[3],
             duplicate_existing=True,
+            import_status="duplicate",
         )
 
     def _is_content_hash_conflict(self, exc: IntegrityError) -> bool:
         return getattr(exc.diag, "constraint_name", None) == DOCUMENT_CONTENT_HASH_UNIQUE_CONSTRAINT
+
+
+def source_anchor_type_for_document(document: NormalizedDocument) -> str:
+    mime_type = str(document.metadata.get("mime_type") or "")
+    parser_name = document.parser_version or ""
+    if mime_type == "application/pdf":
+        return "pdf_page"
+    if mime_type in {
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/msword",
+    }:
+        return "docx_paragraph"
+    if mime_type.startswith("text/") or parser_name:
+        return "text"
+    return "legacy_unknown"

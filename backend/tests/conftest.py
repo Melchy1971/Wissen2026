@@ -94,6 +94,7 @@ def document_fixture(db_session: Session) -> dict[str, str]:
         source_type="upload",
         mime_type="text/plain",
         content_hash="hash-current",
+        import_status="chunked",
         created_at=created,
         updated_at=updated,
     )
@@ -106,6 +107,7 @@ def document_fixture(db_session: Session) -> dict[str, str]:
         source_type="upload",
         mime_type="text/markdown",
         content_hash="hash-older",
+        import_status="parsed",
         created_at=older_created,
         updated_at=older_created,
     )
@@ -122,7 +124,7 @@ def document_fixture(db_session: Session) -> dict[str, str]:
         ocr_used=False,
         ki_provider=None,
         ki_model=None,
-        metadata_={},
+        metadata_={"parser_name": "txt-parser", "source_filename": "current.txt"},
         created_at=created,
     )
     older_version = DocumentVersion(
@@ -155,7 +157,15 @@ def document_fixture(db_session: Session) -> dict[str, str]:
                 content="Second chunk",
                 content_hash="chunk-hash-2",
                 token_estimate=3,
-                metadata_={"source_anchor": {"page": "2", "paragraph": 5, "offset": 12}},
+                metadata_={
+                    "source_anchor": {
+                        "type": "text",
+                        "page": None,
+                        "paragraph": None,
+                        "char_start": 261,
+                        "char_end": 273,
+                    }
+                },
                 created_at=created,
             ),
             Chunk(
@@ -168,7 +178,15 @@ def document_fixture(db_session: Session) -> dict[str, str]:
                 content="x" * 260,
                 content_hash="chunk-hash-1",
                 token_estimate=65,
-                metadata_={"page": 1, "paragraph": 2, "offset": 0},
+                metadata_={
+                    "source_anchor": {
+                        "type": "text",
+                        "page": None,
+                        "paragraph": None,
+                        "char_start": 0,
+                        "char_end": 260,
+                    }
+                },
                 created_at=created,
             ),
         ]

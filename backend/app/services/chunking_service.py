@@ -37,7 +37,12 @@ class MarkdownChunkingService:
             raise ValueError("max_chars must be at least 200")
         self._max_chars = max_chars
 
-    def chunk(self, normalized_markdown: str, document_version_id: str) -> list[MarkdownChunk]:
+    def chunk(
+        self,
+        normalized_markdown: str,
+        document_version_id: str,
+        source_anchor_type: str = "text",
+    ) -> list[MarkdownChunk]:
         if not normalized_markdown.strip():
             raise ChunkingError("Cannot chunk empty markdown content")
         if not document_version_id.strip():
@@ -102,7 +107,7 @@ class MarkdownChunkingService:
                 )
             )
 
-        return chunks
+        return add_source_anchors(chunks, normalized_markdown, source_anchor_type)
 
     def _build_chunk(
         self,
@@ -133,6 +138,58 @@ class MarkdownChunkingService:
 def make_anchor(document_version_id: str, chunk_index: int) -> str:
     normalized_version = re.sub(r"[^a-zA-Z0-9_-]+", "-", document_version_id.strip()).strip("-")
     return f"{ANCHOR_PREFIX}:{normalized_version}:c{chunk_index:04d}"
+
+
+def add_source_anchors(
+    chunks: list[MarkdownChunk],
+    normalized_markdown: str,
+    source_anchor_type: str,
+) -> list[MarkdownChunk]:
+    anchored_chunks: list[MarkdownChunk] = []
+    cursor = 0
+    for chunk in chunks:
+        needle = chunk.content.rstrip("\n")
+        char_start = normalized_markdown.find(needle, cursor)
+        if char_start < 0:
+            char_start = None
+            char_end = None
+        else:
+            char_end = char_start + len(needle)
+            cursor = char_end
+
+        source_anchor = {
+            "type": normalize_source_anchor_type(source_anchor_type),
+            "page": extract_pdf_page(chunk.content) if source_anchor_type == "pdf_page" else None,
+            "paragraph": None,
+            "char_start": char_start,
+            "char_end": char_end,
+        }
+        metadata = {**chunk.metadata, "source_anchor": source_anchor}
+        anchored_chunks.append(
+            MarkdownChunk(
+                chunk_index=chunk.chunk_index,
+                heading_path=chunk.heading_path,
+                anchor=chunk.anchor,
+                content=chunk.content,
+                content_hash=chunk.content_hash,
+                token_estimate=chunk.token_estimate,
+                metadata=metadata,
+            )
+        )
+    return anchored_chunks
+
+
+def normalize_source_anchor_type(source_anchor_type: str) -> str:
+    if source_anchor_type in {"text", "pdf_page", "docx_paragraph", "legacy_unknown"}:
+        return source_anchor_type
+    return "legacy_unknown"
+
+
+def extract_pdf_page(content: str) -> int | None:
+    match = re.search(r"<!--\s*page:(\d+)\s*-->", content)
+    if not match:
+        return None
+    return int(match.group(1))
 
 
 def hash_text(text: str) -> str:

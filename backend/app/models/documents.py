@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -10,7 +10,13 @@ class Base(DeclarativeBase):
 
 class Document(Base):
     __tablename__ = "documents"
-    __table_args__ = (UniqueConstraint("workspace_id", "content_hash", name="uq_documents_workspace_content_hash"),)
+    __table_args__ = (
+        UniqueConstraint("workspace_id", "content_hash", name="uq_documents_workspace_content_hash"),
+        CheckConstraint(
+            "import_status in ('pending', 'parsing', 'parsed', 'chunked', 'failed', 'duplicate')",
+            name="ck_documents_import_status_allowed",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     workspace_id: Mapped[str] = mapped_column(String, nullable=False)
@@ -24,6 +30,7 @@ class Document(Base):
     source_type: Mapped[str] = mapped_column(String(64), nullable=False)
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    import_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

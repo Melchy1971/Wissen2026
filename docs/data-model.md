@@ -1,14 +1,12 @@
 # Datenmodell V1
 
-Dieses Dokument beschreibt das M1-Datenbankschema ohne Codelektuere. V1 ist Single-User ohne
-Authentifizierung. Mehrbenutzerfaehigkeit ist nur strukturell vorbereitet. Originaldateien werden
-nicht gespeichert; kanonische Textquelle ist `document_versions.normalized_markdown`.
+Dieses Dokument beschreibt den aktuellen Datenmodellstand nach Paket 5. Code und Migrationen sind die Ground Truth. Originaldateien werden nicht gespeichert; kanonische Textquelle ist `document_versions.normalized_markdown`.
 
 ## Tabellenuebersicht
 
 - `workspaces`: Arbeitsbereich-Stammdaten mit Default-Workspace fuer V1.
 - `users`: vorbereitete User-Stammdaten mit Default-User, ohne Login-, Passwort- oder Sessiondaten.
-- `documents`: Dokument-Metadaten, Workspace-/Owner-Zuordnung und aktueller Versionszeiger.
+- `documents`: Dokument-Metadaten, Workspace-/Owner-Zuordnung, aktueller Versionszeiger, Deduplizierungs-Hash und Importstatus.
 - `document_versions`: versionierter kanonischer Markdown-Inhalt und Parser-/OCR-/KI-Metadaten.
 - `document_chunks`: aus einer Dokumentversion abgeleitete Textabschnitte mit Quellenanker.
 - `categories`: workspace-faehige Kategorien.
@@ -32,53 +30,165 @@ nicht gespeichert; kanonische Textquelle ist `document_versions.normalized_markd
 - `document_tags` verbindet Dokumente und Tags additiv ueber `source`.
 - Chat- und Analyse-Tabellen verweisen auf Workspaces, vorbereitete User und bei Quellen auf Dokumente, Versionen oder Chunks.
 
-## Versionierungsprinzip
+## `documents`
 
-`documents` enthaelt stabile Dokument-Metadaten. Im Paket-4-Importpfad wird fuer `.txt` und `.md`
-ein Dokument mit `source_type = upload`, `mime_type`, `content_hash`, Default-Workspace und
-Default-User angelegt. Der eigentliche kanonische Text liegt in
-`document_versions.normalized_markdown`. Jede Version gehoert genau zu einem Dokument und hat eine
-eindeutige `version_number` pro Dokument. Der aktuelle Importpfad legt Version 1 an und setzt danach
-`documents.current_version_id`.
+Wichtige Felder:
 
-Originaldateien sind nicht Teil des Schemas. Persistiert werden abgeleitete Inhalte, Hashes,
-Metadaten und versionierter Markdown.
+| Feld | Bedeutung |
+|---|---|
+| `id` | stabile Dokument-ID |
+| `workspace_id` | Workspace-Grenze |
+| `owner_user_id` | vorbereitete Owner-Zuordnung |
+| `current_version_id` | aktuelle Dokumentversion, in der API als `latest_version_id` ausgegeben |
+| `title` | Anzeigename |
+| `source_type` | aktuell Importquelle, z.B. `upload` |
+| `mime_type` | erkannter MIME-Type |
+| `content_hash` | Hash des Quellinhalts fuer Deduplizierung |
+| `import_status` | expliziter Importzustand |
+| `created_at` | Erstellzeitpunkt |
+| `updated_at` | Aktualisierungszeitpunkt |
 
-## Chunk- und Quellenankerprinzip
+Constraints:
 
-Chunks entstehen aus `document_versions.normalized_markdown`. Jeder Chunk gehoert zu genau einer
-Dokumentversion und besitzt einen `chunk_index` sowie einen `anchor`. Der aktuelle Anchor hat das
-Format `dv:<document_version_id>:c0000`. Er ist pro Dokumentversion eindeutig und kann spaeter fuer
-Chat- oder Analysezitate verwendet werden.
+- Primaerschluessel auf `id`.
+- Unique Constraint `uq_documents_workspace_content_hash` auf `(workspace_id, content_hash)`.
+- Check Constraint `ck_documents_import_status_allowed` auf erlaubte Importstatuswerte.
 
-`heading_path` und `metadata` sind JSONB-Felder fuer Strukturinformationen, etwa Ueberschriften,
-Tabellenhinweise, Codeblock-Hinweise oder Positionsdaten. Ein Fulltext-Index auf `content` ist
-vorbereitet, ersetzt aber keine Suchlogik und ist keine Vektorsuche.
+Erlaubte Importstatuswerte:
+
+- `pending`
+- `parsing`
+- `parsed`
+- `chunked`
+- `failed`
+- `duplicate`
+
+## `document_versions`
+
+Wichtige Felder:
+
+| Feld | Bedeutung |
+|---|---|
+| `id` | stabile Versions-ID |
+| `document_id` | zugehoeriges Dokument |
+| `version_number` | fachliche Versionsnummer pro Dokument |
+| `normalized_markdown` | kanonischer Text fuer Read- und spaetere Retrieval-Pfade |
+| `markdown_hash` | Hash des normalisierten Markdown, in API als `content_hash` der Version ausgegeben |
+| `parser_version` | Parserkennung oder Parser-Version |
+| `ocr_used` | ob OCR verwendet wurde; Paket 5 fuehrt kein OCR aus |
+| `ki_provider` | optionaler KI-Provider |
+| `ki_model` | optionales KI-Modell |
+| `metadata` | Parser- und Import-Metadaten |
+| `created_at` | Erstellzeitpunkt der Version |
+
+Versionierungsprinzip:
+
+- `documents` enthaelt stabile Dokument-Metadaten.
+- Der kanonische Inhalt liegt in `document_versions.normalized_markdown`.
+- Der aktuelle Importpfad legt Version 1 an und setzt danach `documents.current_version_id`.
+- Die Read-API behandelt `documents.current_version_id` als `latest_version_id`.
+
+## `document_chunks`
+
+Wichtige Felder:
+
+| Feld | Bedeutung |
+|---|---|
+| `id` | stabile Chunk-ID |
+| `document_id` | zugehoeriges Dokument |
+| `document_version_id` | zugehoerige Version |
+| `chunk_index` | stabile Position innerhalb der Version, in der API als `position` ausgegeben |
+| `heading_path` | strukturierter Ueberschriftenpfad |
+| `anchor` | interner Quellenanker, z.B. `dv:<document_version_id>:c0000` |
+| `content` | Chunk-Volltext, nicht Teil der Read-Detail-API |
+| `content_hash` | Hash des Chunk-Inhalts |
+| `token_estimate` | optionale Tokenschaetzung |
+| `metadata` | strukturierte Chunk-Metadaten inklusive `source_anchor` |
+| `created_at` | Erstellzeitpunkt |
+
+Chunk- und Quellenankerprinzip:
+
+- Chunks entstehen aus `document_versions.normalized_markdown`.
+- Chunks werden fuer die API ueber `chunk_index ASC` sortiert.
+- `GET /documents/{document_id}/chunks` liefert nur `text_preview`, keinen Volltext.
+- `metadata.source_anchor` ist das normalisierte Quellenanker-Schema fuer API-Responses.
+
+Normalisiertes `source_anchor`-Schema:
+
+```json
+{
+  "type": "text",
+  "page": null,
+  "paragraph": null,
+  "char_start": 0,
+  "char_end": 200
+}
+```
+
+Erlaubte `type`-Werte:
+
+- `text`
+- `pdf_page`
+- `docx_paragraph`
+- `legacy_unknown`
+
+Legacy-Verhalten:
+
+- Alte freie oder uneinheitliche `metadata.source_anchor`-Daten werden bei der Migration nicht geloescht.
+- Wenn Legacy-Daten nicht dem normalisierten Schema entsprechen, werden sie nach `metadata.legacy_source_anchor` kopiert.
+- Die API gibt keine freien Legacy-Metadaten-Blobs als `source_anchor` aus.
+
+## Import- und Deduplizierungsprinzip
+
+Der Importpfad unterstuetzt aktuell:
+
+- `.txt`
+- `.md`
+- `.docx`
+- `.doc`
+- `.pdf`
+
+Deduplizierung erfolgt ueber `documents(workspace_id, content_hash)`.
+
+Verhalten:
+
+- Vor dem Insert wird auf vorhandene Dokumente mit gleichem `(workspace_id, content_hash)` geprueft.
+- Die Datenbank sichert denselben Key zusaetzlich per Unique Constraint ab.
+- Bei Insert-Konflikt wird der Konflikt abgefangen und das bestehende Dokument deterministisch zurueckgegeben.
+- Duplicate-Responses setzen `duplicate_status = duplicate_existing` und `import_status = duplicate`.
 
 ## Tag-Prinzip
 
-Kategorien und Tags sind getrennt modelliert. Tags sind pro Workspace ueber `normalized_name`
-eindeutig. `document_tags.source` ist kontrolliert auf `manual`, `ki` und `import`.
+Kategorien und Tags sind getrennt modelliert. Tags sind pro Workspace ueber `normalized_name` eindeutig. `document_tags.source` ist kontrolliert auf `manual`, `ki` und `import`.
 
-Die Zuordnung ist additiv: Der Primaerschluessel `(document_id, tag_id, source)` erlaubt, dass ein
-manuelles Tag und ein KI-Tag fuer dasselbe Dokument parallel existieren. Manuelle Tags ueberschreiben
-KI-Tags nicht automatisch.
+Die Zuordnung ist additiv: Der Primaerschluessel `(document_id, tag_id, source)` erlaubt, dass ein manuelles Tag und ein KI-Tag fuer dasselbe Dokument parallel existieren. Manuelle Tags ueberschreiben KI-Tags nicht automatisch.
 
 ## Chat- und Analyse-Vorbereitung
 
-`chat_sessions` und `chat_messages` erlauben spaeter die Persistenz von Chatverlaeufen. `basis_type`
-unterscheidet `knowledge_base`, `general`, `mixed` und `unknown`, ohne Chatlogik zu implementieren.
-Quellen koennen zunaechst in `source_metadata` abgelegt werden.
+`chat_sessions` und `chat_messages` erlauben spaeter die Persistenz von Chatverlaeufen. `basis_type` unterscheidet `knowledge_base`, `general`, `mixed` und `unknown`, ohne Chatlogik zu implementieren. Quellen koennen zunaechst in `source_metadata` abgelegt werden.
 
-Analysefunktionen werden ueber `analysis_groups`, `analysis_group_documents`, `analysis_results` und
-`analysis_result_sources` vorbereitet. Ergebnisarten sind `merge`, `compare` und `refine`.
-Analyseergebnisse koennen vor einem spaeteren Commit gespeichert werden; `commit_ref` ist optional.
+Analysefunktionen werden ueber `analysis_groups`, `analysis_group_documents`, `analysis_results` und `analysis_result_sources` vorbereitet. Ergebnisarten sind `merge`, `compare` und `refine`. Analyseergebnisse koennen vor einem spaeteren Commit gespeichert werden; `commit_ref` ist optional.
+
+## Migrationen
+
+Relevante Migrationen fuer das Dokumentmodell:
+
+- `20260430_0001_initial_document_schema.py`: Basis fuer Workspaces, Users, Documents und Versions.
+- `20260430_0002_document_chunks.py`: Chunk-Tabelle mit Inhalt, Hash, Position und Metadaten.
+- `20260430_0003_categories_tags.py`: Kategorien, Tags und Dokument-Tag-Zuordnung.
+- `20260430_0004_chat_analysis.py`: vorbereitete Chat- und Analyse-Tabellen.
+- `20260504_0005_document_content_hash_unique.py`: Unique Constraint fuer `(workspace_id, content_hash)`.
+- `20260504_0006_document_import_status.py`: `documents.import_status`, Backfill und Check Constraint.
+- `20260504_0007_normalize_chunk_source_anchor.py`: Normalisierung von `metadata.source_anchor`.
 
 ## V1-Grenzen
 
 - Keine Authentifizierung.
 - Keine Rollen- oder Rechtepruefung.
-- Importpipeline aktuell nur fuer `.txt` und `.md`.
+- Keine UI.
+- Keine OCR-Ausfuehrung.
 - Keine Chat- oder Analyse-Service-Logik.
 - Keine verpflichtende Vektorsuche.
+- Keine Embedding-Pipeline.
 - Keine Speicherung von Originaldateien.
+- Kein implementierter `/api/v1/documents`-Alias fuer die Dokument-API; aktuell ist `/documents` implementiert.
