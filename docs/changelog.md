@@ -36,3 +36,33 @@ Stand: 2026-05-04
 
 - `/api/v1/documents` ist weiter Zielpfad, aber noch kein implementierter Alias.
 - OCR und feinere Source-Anchor-Granularitaet bleiben offene Folgethemen.
+
+## 2026-05-04 - M3a GUI Foundation Prototyp
+
+### Added
+
+- Minimaler read-only Frontend-Prototyp fuer M3a auf React/Vite.
+- Routing fuer `/documents` und `/documents/:id`.
+- Getrennter API-Client fuer die Dokument-Read-Endpunkte.
+- Statuskomponenten fuer Loading, Empty und Error.
+- Dokumentliste, Dokumentdetail, Versionen-Anzeige und Chunk-Vorschau.
+- Frontend-Dokumente `docs/frontend.md`, `docs/api.md`, `docs/m3a-viewmodels.md`, `docs/m3a-implementation-plan.md`, `docs/m3a-test-strategy.md`.
+
+### Changed
+
+- `frontend/src/app/App.jsx` verwendet jetzt Routing statt Platzhalterseite.
+- `frontend/src/pages/DocumentsPage.jsx` rendert Dokumentliste ueber `GET /documents`.
+- `frontend/src/pages/DocumentDetailPage.jsx` rendert Detail, Versionen und Chunk-Vorschau ueber die bestehenden Paket-5-Endpunkte.
+- `masterplan.md` und `docs/status.md` spiegeln den M3a-Zwischenstand wider.
+
+### Validated
+
+- Frontend-Testlauf: `5 passed`.
+- Frontend-Build: `vite build` erfolgreich.
+
+### Outstanding
+
+- Keine separaten Unit-Tests fuer ViewModel-Mapping und Fehlerabbildung.
+- Keine eigenstaendigen API-Mock-Tests fuer `404`, `409` und API down.
+- Kein E2E-Smoke-Test.
+- Versionen und Chunks haben noch keine eigenen Routen, sondern leben aktuell im Detailscreen.

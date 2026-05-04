@@ -29,6 +29,21 @@ Der Gesamt-Score ist der arithmetische Mittelwert der Kategorien API, Datenbank,
 
 Paket 5 ist fuer den aktuellen Entwicklungsstand als belastbare M3-Basis freigegeben. Der Abschluss ist nicht nur fachlich, sondern durch PostgreSQL-Integration und gemessene Read-Performance praktisch verifiziert.
 
+## Folge-Gate fuer GUI-Start
+
+Die GUI startet nicht vor Paket 5.
+
+Harte Regel:
+
+- Start von `M3a - GUI Foundation` nur nach erfolgreichem Paket-5-Gate.
+- Mindestschwelle fuer den GUI-Start ist ein Paket-5-Gesamtscore von `>= 90`.
+- GUI darf nur gegen den dokumentierten API-Vertrag entwickeln, nicht gegen implizite Backend- oder Datenbankannahmen.
+
+Begruendung:
+
+- Paket 5 ist die Integrationsgrenze, die Read-API, Fehlerstandard und Datenkonsistenz stabilisiert.
+- Ein frueherer GUI-Start wuerde die UI an potenziell instabile Vertrags- und Zustandslogik koppeln.
+
 ## API
 
 Score: `92`

@@ -4,7 +4,7 @@ Stand: 2026-05-04
 
 ## Paket-5-Abschlussstand
 
-Paket 5 ist fachlich weitgehend umgesetzt, aber das harte Abschluss-Gate ist noch nicht vollstaendig bestanden.
+Paket 5 ist fachlich und technisch abgeschlossen. Das harte Abschluss-Gate ist bestanden.
 
 - Letzter verifizierter Standardlauf: `42 passed, 1 skipped`
 - Zusaetzlicher PostgreSQL-Integrationslauf: `6 passed`
@@ -14,6 +14,42 @@ Paket 5 ist fachlich weitgehend umgesetzt, aber das harte Abschluss-Gate ist noc
 - Verifizierter Performance-Lauf auf PostgreSQL-Referenzdaten: alle Zielwerte eingehalten.
 - Abschlussbewertung: `96/100`
 - Entscheidung: `abgeschlossen`.
+
+## GUI-Startregel nach Paket 5
+
+Die GUI wird bewusst nicht vor Abschluss von Paket 5 entwickelt.
+
+- GUI-Start erfolgt erst nach erfolgreichem Paket-5-Gate.
+- Mindestbedingung ist ein Paket-5-Gesamtscore von `>= 90`.
+- Grundlage fuer GUI-Arbeit ist der synchronisierte Dokument-API-Vertrag, nicht direkte Kopplung an Datenbank oder Parser-Interna.
+- Vor M3 startet zuerst `M3a - GUI Foundation`; Suche, Chat und Analyse bleiben ausserhalb dieses GUI-Starts.
+
+Begruendung:
+
+- Erst Paket 5 liefert stabile Read-Pfade, konsistente Dokumentzustaende und einen belastbaren Fehlerstandard.
+- Fruehere GUI-Entwicklung wuerde gegen instabile Vertragsgrenzen koppeln und teure UI-Nacharbeit erzeugen.
+
+## M3a GUI Foundation
+
+Stand des Abgleichs mit Code und Frontend-Tests am 2026-05-04:
+
+- Minimaler read-only GUI-Prototyp ist implementiert.
+- Route `/documents` zeigt die Dokumentliste.
+- Route `/documents/{id}` zeigt Metadaten, Versionen und Chunk-Vorschau.
+- Importstatus und Fehlercodes sind sichtbar.
+- Suche, Chat, Upload und Mutation sind nicht implementiert.
+- Frontend-Validierung aktuell: `5 passed` und `vite build` gruen.
+
+Bewertung:
+
+- Scope: groesstenteils umgesetzt.
+- Nicht-Scope: eingehalten.
+- Tests: nicht vollstaendig fuer harten Abschluss.
+
+Entscheidung:
+
+- M3a ist als Prototyp implementiert, aber noch nicht final abgeschlossen.
+- Go fuer M3b Retrieval: `No-Go`, bis Unit-Tests, API-Mock-Tests und ein E2E-Smoke-Test nachgezogen sind.
 
 ## Ground Truth = Code, nicht Dokumentation
 

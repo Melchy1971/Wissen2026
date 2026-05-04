@@ -13,7 +13,7 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Bereich | Entscheidung | Aktueller Stand |
 |---|---|---|
 | Backend | FastAPI | ✅ implementiert |
-| Frontend | React/Vite | vorgesehen, nicht Fokus von Paket 5 |
+| Frontend | React/Vite | GUI-Start erst nach Paket-5-Gate mit Score >= 90 |
 | Datenbank | PostgreSQL als Ziel-DB | Schema und Alembic-Migrationen vorhanden |
 | Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | ✅ implementiert |
 | Migrationen | Alembic | ✅ implementiert |
@@ -27,7 +27,8 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | ✅ implementiert |
 | Fehlerstandard | einheitliches API-Error-Envelope | ✅ implementiert fuer Paket-5-Pfade |
 | OCR | explizit nicht Teil von Paket 5 | fehlt |
-| Suche/Retrieval | M3, nur auf stabile Read-API aufsetzen | noch nicht implementiert |
+| GUI-Start | M3a erst nach erfolgreichem Paket-5-Gate mit Score >= 90 | noch nicht gestartet |
+| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | noch nicht implementiert |
 | Chat | nach M3 | noch nicht implementiert |
 | Analyse | nach Chat/Retrieval-Grundlage | vorbereitet im Datenmodell, Fachlogik fehlt |
 | Vektorsuche | optional, nicht V1-kritisch | fehlt |
@@ -161,7 +162,7 @@ Noch zu vereinheitlichen:
 
 ### Frontend
 
-React/Vite bleibt das Ziel fuer die V1-GUI. Paket 5 enthaelt keine UI-Arbeit.
+React/Vite bleibt das Ziel fuer die V1-GUI. Die GUI wird bewusst nicht vor Abschluss von Paket 5 entwickelt. GUI-Start ist erst in M3a zulaessig, wenn das Paket-5-Abschluss-Gate erfolgreich mit Score >= 90 erreicht wurde und der Dokument-API-Vertrag als stabile Integrationsbasis vorliegt.
 
 ### Datenbank
 
@@ -362,6 +363,137 @@ Erlaubte Typen:
 
 ---
 
+## M3a - GUI Foundation
+
+**Status:** partial.
+
+**Ziel:** Read-only Web-GUI zur Sichtbarmachung des Backend-Zustands auf stabiler Backend- und API-Basis, ohne Such-, Chat- oder Analysefachlogik vorzuziehen.
+
+### Harte Startbedingungen
+
+- Paket 5 ist im Abschluss-Gate erfolgreich freigegeben.
+- Paket-5-Gesamtscore ist `>= 90`.
+- Der Dokument-API-Vertrag fuer Read- und Import-Pfade ist mit dem Code synchronisiert.
+- Read-API, Fehlerstandard und Datenkonsistenz sind auf PostgreSQL praktisch verifiziert.
+- Offene Restpunkte aus Paket 5 sind dokumentierte Nicht-Blocker und nicht contract-critical fuer die GUI-Basis.
+
+### Scope
+
+- Technische GUI-Grundstruktur mit React/Vite stabilisieren.
+- API-Client-Schicht strikt gegen den dokumentierten Dokument-API-Vertrag aufbauen.
+- Basisnavigation und App-Shell fuer Dokumentliste und Dokumentdetail bereitstellen.
+- Lade-, Leer- und Fehlerzustaende passend zum API-Error-Envelope definieren.
+- Frontend-Typen, DTO-Mapping und Vertragsgrenzen zwischen Backend und GUI festziehen.
+- Read-only Sicht auf Dokumentliste, Dokumentdetail, Versionen, Chunks und Importstatus ueber vorhandene Endpunkte anbinden.
+- Fehlerzustaende und Zustandskonflikte sichtbar machen, ohne fachliche Korrektur- oder Schreibpfade einzufuehren.
+
+### Nicht-Scope
+
+- Keine Suche, kein Ranking und kein Retrieval.
+- Kein Chat und keine Chat-UI.
+- Kein Upload.
+- Kein Bearbeiten von Dokumenten, Versionen oder Chunks.
+- Keine Rollen- und Rechteverwaltung.
+- Keine Analyse-, Merge-, Refine- oder Commit-Oberflaechen.
+- Keine OCR-UI oder parsernahen Sonderlogiken ausser sichtbarer Status- und Fehlerdarstellung.
+- Keine Embeddings oder embeddingnahe Oberflaechen.
+- Keine direkte Kopplung an DB-Strukturen, Parser-Interna oder undokumentierte Response-Felder.
+
+### Zielbild
+
+- Die GUI ist ein lesender Beobachter des Backend-Zustands.
+- Nutzer sehen, welche Dokumente im System vorhanden sind, in welchem Importzustand sie sich befinden und welche Versionen und Chunks aktuell lesbar sind.
+- Die GUI bildet nur bereits vorhandene Backend-Faehigkeiten ab und fuehrt keine neue Fachlogik ein.
+- Jeder sichtbare Zustand in der GUI muss direkt aus einem dokumentierten API-Response ableitbar sein.
+
+### Screens
+
+- Dokumentliste
+  - Tabelle oder Kartenansicht mit `title`, `mime_type`, `created_at`, `updated_at`, `import_status`, `version_count`, `chunk_count`.
+  - Leerstates und Fehlerstate fuer fehlende `workspace_id`, ungueltige Pagination oder Backend-Fehler.
+- Dokumentdetail
+  - Stammdaten des Dokuments, `import_status`, `latest_version`, Parser-Metadaten und Chunk-Summary.
+  - Sichtbarer Hinweis bei inkonsistentem Dokumentzustand oder nicht lesbarem Dokument.
+- Versionen-Ansicht
+  - Read-only Liste der vorhandenen Versionen in API-Reihenfolge.
+  - Anzeige von `version_number`, `created_at`, `content_hash` und relevanten Metadaten aus dem Vertrag.
+- Chunks-Ansicht
+  - Read-only Liste der Chunks der aktuellen Version in `position ASC`.
+  - Anzeige von `position`, `text_preview` und normalisiertem `source_anchor`.
+- Fehler- und Statusdarstellung
+  - Gemeinsame UI-Komponente fuer API-Fehler, Leerstates und Konfliktzustaende.
+  - Sichtbare Darstellung von `OCR_REQUIRED`, `DOCUMENT_STATE_CONFLICT`, `DOCUMENT_NOT_FOUND`, `WORKSPACE_REQUIRED` und `INVALID_PAGINATION`, soweit sie ueber die M3a-Screens auftreten.
+
+### User Flows
+
+- Nutzer oeffnet die Dokumentliste fuer einen Workspace und sieht alle lesbaren Dokumente mit Importstatus.
+- Nutzer waehlt ein Dokument aus der Liste und gelangt in die Dokumentdetailansicht.
+- Nutzer oeffnet von dort die Versionen-Ansicht und sieht die Versionshistorie read-only.
+- Nutzer oeffnet die Chunks-Ansicht und sieht die Chunks der aktuellen Version mit Quellenanker und Vorschautext.
+- Nutzer trifft auf einen Fehler- oder Konfliktzustand und bekommt den Backend-Status sichtbar, ohne dass die GUI versucht, ihn still zu reparieren.
+
+### API-Abhaengigkeiten
+
+- Dokumentliste haengt an `GET /documents`.
+- Dokumentdetail haengt an `GET /documents/{document_id}`.
+- Versionen-Ansicht haengt an `GET /documents/{document_id}/versions`.
+- Chunks-Ansicht haengt an `GET /documents/{document_id}/chunks`.
+- Importstatus wird ausschliesslich aus dokumentierten Response-Feldern wie `import_status` gelesen.
+- Fehlerdarstellung haengt am standardisierten Error-Envelope `{"error": {"code": "...", "message": "...", "details": {...}}}`.
+- M3a fuehrt keine neue API ein; sie konsumiert ausschliesslich vorhandene Paket-5-Endpunkte.
+
+### Begruendung fuer den spaeten GUI-Start
+
+- Vor Paket 5 waere die GUI gegen instabile Read-Pfade, uneinheitliche Fehlerfaelle und wechselnde Datenzustandsregeln entwickelt worden.
+- Fruehe GUI-Entwicklung haette Backend-Unschaerfen kaschiert statt den API-Vertrag zu haerten.
+- Paket 5 definiert die stabile Integrationsgrenze fuer Dokumentliste, Dokumentdetail, Versionen, Chunks, Import und Fehlerbehandlung.
+- Erst nach erfolgreichem Paket-5-Gate lohnt sich GUI-Arbeit, weil dann Backend, Datenmodell und Vertragsgrenzen belastbar genug sind und teure UI-Nacharbeit durch API-Brueche vermieden wird.
+
+### Abhaengigkeiten zwischen Backend, API-Vertrag und GUI
+
+- Backend liefert die fachliche Wahrheit fuer Dokumentzustand, Versionen, Chunks und Fehlercodes.
+- Der API-Vertrag ist die einzige erlaubte Kopplung zwischen GUI und Backend.
+- GUI konsumiert nur dokumentierte Endpunkte und contract-critical Felder.
+- Backend-Aenderungen mit GUI-Auswirkung muessen zuerst im API-Vertrag beschrieben werden, bevor die GUI sie konsumiert.
+- M3 baut fuer Suchfunktionen auf derselben GUI-Foundation auf, erweitert sie aber erst nach stabiler Such-API.
+
+### Gate-Regel
+
+- Start von M3a nur, wenn Paket 5 im Abschluss-Gate den Score `>= 90` erreicht und als `freigegeben` bzw. `abgeschlossen` dokumentiert ist.
+
+### Akzeptanzkriterien
+
+- Die GUI zeigt eine Dokumentliste fuer einen Workspace auf Basis von `GET /documents` an.
+- Die GUI zeigt fuer ein Dokument eine Detailansicht auf Basis von `GET /documents/{document_id}` an.
+- Die GUI zeigt Versionen read-only auf Basis von `GET /documents/{document_id}/versions` an.
+- Die GUI zeigt Chunks read-only auf Basis von `GET /documents/{document_id}/chunks` an.
+- `import_status` ist in Liste und Detail sichtbar.
+- Relevante Fehlerzustaende aus dem API-Vertrag werden sichtbar angezeigt und nicht verdeckt.
+- M3a fuehrt keine Schreiboperationen, keinen Upload, keine Suche, keinen Chat, keine OCR-Logik und keine Embedding-Logik ein.
+- Die GUI koppelt nur an dokumentierte Endpunkte und contract-critical Felder.
+
+### Aktueller Abschlussstand
+
+- ✅ Minimaler read-only GUI-Prototyp ist implementiert.
+- ✅ Dokumentliste ist unter `/documents` sichtbar.
+- ✅ Dokumentdetail ist unter `/documents/:id` sichtbar.
+- ✅ Versionen und Chunk-Vorschau werden im Detailscreen angezeigt.
+- ✅ Importstatus und Fehlercodes sind sichtbar.
+- ✅ Suche, Chat, Upload und Mutation sind nicht implementiert.
+- ✅ Frontend-Testlauf verifiziert: `5 passed`.
+- ✅ Frontend-Build verifiziert: `vite build` erfolgreich.
+- Offen fuer harten Abschluss:
+  - Unit-Tests fuer ViewModel-Mapping und Fehlerabbildung.
+  - dedizierte API-Mock-Tests fuer `404`, `409` und API down.
+  - E2E-Smoke-Test fuer Liste -> Detail -> Chunks.
+
+### Vorlaeufige Entscheidung
+
+- M3a ist als Prototyp umgesetzt, aber nicht als final abgeschlossen freigegeben.
+- M3b Retrieval startet erst nach Schliessung der offenen Testluecken.
+
+---
+
 ## M3 - Suche und Quellenanker
 
 **Status:** next.
@@ -370,6 +502,7 @@ Erlaubte Typen:
 
 ### Vorbedingungen
 
+- M3a GUI Foundation ist abgeschlossen, falls die GUI parallel zur Suche weiterentwickelt wird.
 - M3 nutzt dokumentierte Read-Endpunkte und contract-critical Felder.
 - M3 greift nicht direkt auf Parser-Interna oder freie Chunk-Metadaten zu.
 - Chunks werden ueber `chunk_id`, `position` und `source_anchor` referenziert.
@@ -480,11 +613,12 @@ Erlaubte Typen:
 1. Paket-5-Aenderungen committen.
 2. Optionalen `/api/v1/documents`-Alias implementieren, falls M3 direkt versionierte Pfade verwenden soll.
 3. PostgreSQL-Integrationstests fuer Paket-5-Read-API in CI oder lokalem Standardlauf absichern.
-4. M3 Such-Contract definieren.
-5. PostgreSQL-Fulltext-Suche auf Chunks implementieren.
-6. Such-API mit Quellenanker-Responses bauen.
-7. Ranking- und Filtertests ergaenzen.
-8. Danach M4 Chat auf Retrieval-Ergebnisse aufsetzen.
+4. M3a GUI Foundation nach Paket-5-Gate starten.
+5. M3 Such-Contract definieren.
+6. PostgreSQL-Fulltext-Suche auf Chunks implementieren.
+7. Such-API mit Quellenanker-Responses bauen.
+8. Ranking- und Filtertests ergaenzen.
+9. Danach M4 Chat auf Retrieval-Ergebnisse aufsetzen.
 
 ---
 
@@ -495,6 +629,7 @@ Erlaubte Typen:
 | OCR fehlt | gescannte PDFs sind fuer Suche/Chat nicht nutzbar | `OCR_REQUIRED` sichtbar halten, OCR als eigenes Paket planen |
 | Parser-Qualitaet uneinheitlich | schlechte Chunks oder Quellenanker | Parser-Metriken und Format-spezifische Tests ergaenzen |
 | Quellenpositionen unvollstaendig | Zitate koennen grob bleiben | `source_anchor` weiter anreichern, Legacy sauber kennzeichnen |
+| GUI startet vor stabilem API-Gate | UI koppelt gegen instabile Backend-Vertraege | GUI-Start strikt erst nach Paket-5-Gate mit Score >= 90 |
 | `/api/v1/documents` Alias fehlt | M3 koennte spaeter auf unversionierten Pfad koppeln | Alias vor M3-Clientbindung implementieren |
 | Import-Persistenz nutzt direkten `psycopg` | uneinheitliche DB-Schicht | nach Paket 5 in Repository-/Session-Struktur ueberfuehren |
 | PostgreSQL-Tests optional | DB-spezifische Fehler koennen unbemerkt bleiben | `TEST_DATABASE_URL` in CI setzen |
@@ -508,5 +643,7 @@ Erlaubte Typen:
 - [Projektstatus](docs/status.md)
 - [Datenmodell V1](docs/data-model.md)
 - [V1 Dokument-API Contract](docs/api/v1-document-api-contract.md)
+- [M3a GUI Implementierungsplan](docs/m3a-implementation-plan.md)
+- [M3a GUI ViewModels](docs/m3a-viewmodels.md)
 - [Definition of Done: Paket 5](docs/paket-5-definition-of-done.md)
 - [ADR: Dokument-Read-API und Datenkonsistenz vor Retrieval](docs/adr/0003-document-read-api-before-retrieval.md)
