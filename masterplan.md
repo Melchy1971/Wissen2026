@@ -103,16 +103,15 @@ Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retri
 - ✅ Harte DB-Deduplizierung.
 - ✅ Stabile Read-API fuer Dokumente, Versionen und Chunks.
 - ✅ Einheitlicher Fehlerstandard.
-- Volltextsuche und Tagfilter in M3.
-- Chat mit Quellenpflicht bei Dokumentbezug nach M3.
-- Analysefunktionen nach stabiler Retrieval-Grundlage.
+  - Volltextsuche in M3.
+  - Chat und Analyse sind fuer M4 kein aktiver Ausbaupfad.
 - Produktionsnahe Tests fuer Kernpfade.
 
 ### Explizit nicht in V1
 
-- Authentifizierung.
-- aktive Rollen-/Rechtepruefung.
-- vollstaendige Mehrbenutzerlogik.
+- Vollausbau von Login-/Logout-UX.
+- OAuth, SSO und externe Identity Provider.
+- komplexe Rollen-/Rechteverwaltung.
 - Vektorsuche als Pflichtbestandteil.
 - VPS-Deployment von GUI/API als Muss.
 - vollstaendiges Alerting.
@@ -315,106 +314,134 @@ Erlaubte Typen:
 
 ---
 
-## M4a - Authentifizierung und Workspace-Isolation
+## M4 - Neuaufsetzung auf Basis des realen Zustands
 
-**Status:** partial, Abschluss aktuell nicht erreicht.
+**Status:** aktiv neu geschnitten.
 
-**Ziel:** Jeder Request wird serverseitig einem authentifizierten Benutzer und einem autorisierten Workspace zugeordnet.
+**Ground Rule:** M4 wird auf den belegten Kern reduziert. Alte Parallelmodelle, halbfertige Produktpfade und Scope-Erweiterungen gelten nicht als M4-Fortschritt.
 
-### Nachweisbar implementiert
+### Neue Reihenfolge
 
-- `AUTH_REQUIRED` und `ADMIN_REQUIRED` fuer den Admin-Rebuild mit `x-admin-token`
-- `WORKSPACE_REQUIRED` fuer mehrere fachliche Endpunkte
-- Workspace-Bezug in Dokument-, Search- und Chat-Vertraegen
-- vorbereitete `users`, `workspaces`, `owner_user_id` und `workspace_id` im Datenmodell
+1. `M4a - Auth (hart)`
+2. `M4b - Upload (stabil)`
+3. `Gate fuer M4a + M4b`
+4. erst danach Entscheidung ueber `M4c+`
 
-### Nicht nachweisbar implementiert
+### Harte Stop-Regel fuer ganz M4
 
-- `POST /auth/login`
-- `POST /auth/logout`
-- `GET /auth/me`
-- `workspace_memberships`
-- `auth_sessions`
-- serverseitiger `current_user`/`current_workspace`-Kontext fuer Fachendpunkte
-- Frontend-Login und Logout
-
-### Bekannte Einschraenkungen
-
-- Upload verwendet weiterhin Default-Kontext aus den Settings.
-- Dokumente und Chat verwenden weiterhin `workspace_id` im Query- oder Request-Kontext.
-- Frontend-Navigation ist nicht durch serverseitig aufgeloeste Memberships abgesichert.
-
-### Abschlussentscheidung
-
-- Dokumentationspflicht: erfuellt
-- M4a nach Code- und Dokuabgleich: **nicht abgeschlossen**
+- Kein Start von `M4c+`, solange `M4a` und `M4b` nicht beide freigegeben sind.
+- Kein Ausbau von Chat, Admin-UX, Backup/Restore oder weiterer Produktisierung, solange alte Parallelannahmen im System aktiv sind.
+- Dokumentation darf nicht ueber den belegten Code- und Teststand hinausgehen.
 
 ---
 
-## M4b - Upload-GUI
+## M4a - Auth (hart)
 
-**Status:** partial, Abschluss aktuell nicht erreicht.
+**Status:** partial, nicht freigegeben.
 
-**Ziel:** Der bestehende Importpfad soll in der GUI fuer Einzelupload, Statussichtbarkeit und nachvollziehbare Fehler-/Duplicate-Rueckmeldung produktiv nutzbar sein.
+**Ziel:** Ein einziges, durchgesetztes Sicherheitsmodell ohne Fallbacks oder Sonderpfade.
 
-### Nachweisbar implementiert
+### Scope
 
-- Upload-Formular in der Dokumentansicht
-- asynchroner Upload ueber `POST /documents/import`
-- generisches Job-Polling ueber `GET /api/v1/jobs/{job_id}`
-- sichtbare Jobstatuslabels fuer `queued`, `running`, `completed`, `failed`
-- generische Erfolgs- und Fehlerdarstellung
-- Testabdeckung fuer `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, `PARSER_FAILED` und `OCR_REQUIRED`
-- Duplicate-Erkennung im Backend mit `import_status = duplicate`
+- verpflichtende Authentifizierung fuer geschuetzte Endpunkte
+- eindeutige Benutzeridentitaet
+- serverseitige Workspace-Zuordnung aus Auth-Kontext
+- Membership-Pruefung pro Workspace
+- kein Endpoint vertraut `workspace_id` aus Query oder Body
+- Admin-Rechte nur ueber Rollenmodell
+- Mutationen muessen ebenso workspace-scoped sein wie Read-Pfade
 
-### Nicht konsistent abgeschlossen
+### Nicht-Scope
 
-- kein dedizierter Duplicate-Zustand in der GUI
-- kein dedizierter OCR-Hinweis in der GUI
-- kein Direkt-Sprung in die Dokumentdetailansicht nach Erfolg
-- Upload laeuft weiterhin im Default-Workspace-/Default-User-Kontext statt im serverseitig aufgeloesten M4a-Kontext
+- Login-UI
+- Logout-UX
+- OAuth, SSO und externe Identity Provider
+- feingranulare Enterprise-Rollenmodelle
 
-### Bekannte Einschraenkungen
+### Aktueller realer Stand
 
-- nur Einzelupload
-- kein Byte-Fortschritt
-- Polling mit festem Intervall statt adaptiver Strategie
-- Frontend faellt weiter auf einen Default-Workspace im Query-Kontext zurueck
+- Auth-Middleware und Header-basierter Request-Kontext sind implementiert.
+- `POST /api/v1/auth/login` und `GET /api/v1/auth/me` existieren als technischer Kern.
+- Search, Dokument-Read, Upload und Teile der Admin-/Chat-Pfade nutzen bereits den Auth-Kontext.
+- M4a ist trotzdem nicht abgeschlossen, weil die Sicherheitsgrenze noch nicht fuer alle Mutationen konsistent durchgezogen ist.
 
-### Abschlussentscheidung
+### Freigabekriterien
 
-- Dokumentationspflicht: erfuellt
-- M4b nach Code- und Dokuabgleich: **nicht abgeschlossen**
+- alle geschuetzten Endpunkte verlangen gueltige Authentifizierung
+- kein produktiver Fachendpoint vertraut `workspace_id` aus Query oder Body
+- keine produktive Nutzung von `x-admin-token`
+- keine produktiven Default-Workspace-/Default-User-Pfade
+- Lifecycle- und sonstige Mutationen sind workspace-scoped
+- Angriffstests fuer unautorisierte, fremde und manipulierte Requests sind gruen
+
+### Stop-Regeln fuer M4a
+
+- irgendein geschuetzter Endpoint funktioniert ohne gueltige Auth
+- irgendeine Mutation ist nicht workspace-scoped
+- irgendein produktiver Endpoint nutzt `workspace_id` als Vertrauensquelle aus Query oder Body
+- `x-admin-token` ist noch Teil des produktiven Vertrags
+- Default-Workspace oder Default-User beeinflusst noch produktive Requests
 
 ---
 
-## M4c - Dokument-Lifecycle
+## M4b - Upload (stabil)
 
-**Status:** implemented.
+**Status:** partial, nicht freigegeben.
 
-**Ziel:** Dokumente muessen zwischen aktivem Betrieb, Archivierung und Soft-Delete unterscheidbar sein, ohne historische Referenzen fuer Versionen, Chunks und Chat-Citations zu brechen.
+**Ziel:** Ein robuster Einzelupload mit genau einem kanonischen Vertrag und nachvollziehbaren Zustandswechseln.
 
-### Nachweisbar implementiert
+### Scope
 
-- Lifecycle-Werte `active`, `archived`, `deleted`
-- Lifecycle-Felder `lifecycle_status`, `archived_at`, `deleted_at`
-- `PATCH /documents/{document_id}/archive`
-- `PATCH /documents/{document_id}/restore`
-- `DELETE /documents/{document_id}` als Soft-Delete
-- Dokumentliste mit Defaultfilter auf `active`
-- Search/Retrieval nur fuer `active`
-- historische Chat-Citations bleiben fuer geloeschte Dokumente sichtbar
+- genau ein Uploadvertrag: `POST /documents/import -> 202 Accepted -> Job-Polling`
+- saubere Fehlerpfade fuer Typ, Groesse, Parserfehler, OCR-Bedarf und Job-404
+- korrektes Duplicate-Handling auch unter Parallelitaet
+- GUI zeigt den echten Job- und Importzustand
+- Frontend nutzt den zentralen Auth-/Workspace-Kontext
+- Dokumentliste wird nach erfolgreichem Import korrekt aktualisiert
 
-### Bekannte Einschraenkungen
+### Nicht-Scope
 
-- kein Restore fuer `deleted`
-- kein separater Purge-/Hard-Delete-Prozess
-- `lifecycle_status=deleted` ist als Querywert formal zulaessig, liefert aber fachlich keine sichtbaren Dokumente
+- OCR-Produktflow
+- Upload aus Chat
+- Multi-Upload
+- ausgebaute Diagnostik oder Komfortfeatures
+- Polling-Optimierung vor Stabilisierung des Kernvertrags
 
-### Abschlussentscheidung
+### Aktueller realer Stand
 
-- Dokumentationspflicht: erfuellt
-- M4c nach Code- und Dokuabgleich: **abgeschlossen**
+- Der jobbasierte Uploadpfad ist im Backend und in Teilen der GUI implementiert.
+- Standardfehler und einfache Erfolgsfaelle sind nachweisbar.
+- M4b ist nicht abgeschlossen, solange Duplicate-Parallelitaet, veraltete Upload-Annahmen und GUI/API-Drift nicht bereinigt sind.
+
+### Freigabekriterien
+
+- keine zweite Upload-Semantik im Code, in Tests oder in der Doku
+- Integrationstests pruefen den echten jobbasierten Vertrag
+- Duplicate-Verhalten ist auch unter Parallelitaet sauber
+- GUI und Backend-Vertrag sind deckungsgleich
+- Fehlercodes sind sichtbar, korrekt gemappt und stabil
+
+### Stop-Regeln fuer M4b
+
+- Upload hat mehr als einen aktiven Vertragsmodus
+- Duplicate-Verhalten ist unter Parallelitaet nicht belastbar korrekt
+- GUI zeigt nicht den realen Backend-Zustand
+- Tests pruefen veraltete Upload-Semantik statt des echten Job-Flows
+
+---
+
+## M4c+ - Rest pausiert
+
+**Status:** pausiert.
+
+Nicht aktiver Implementierungsscope vor erfolgreichem Gate fuer `M4a` und `M4b`:
+
+- M4c Lifecycle-Ausbau als Produktflow
+- M4d Admin- und Diagnose-UX
+- M4e Backup/Restore
+- weitere Produktisierung, Komfortfeatures und Ausbaupfade
+
+Diese Themen duerfen erst wieder aktiv geplant oder implementiert werden, wenn `M4a` und `M4b` beide freigegeben sind.
 
 ---
 

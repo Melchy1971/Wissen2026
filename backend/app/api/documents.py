@@ -4,7 +4,7 @@ from typing import Annotated, Iterator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile, status
 
-from app.api.dependencies.auth import RequestAuthContext, require_workspace_member
+from app.api.dependencies.auth import AuthContext, require_workspace_member
 from app.core.config import settings
 from app.core.database import DatabaseConfigurationError
 from app.core.errors import (
@@ -36,12 +36,7 @@ from app.services.jobs.background_jobs import BackgroundJobNotFoundError, Backgr
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-
-@dataclass(frozen=True)
-class UploadRequestContext:
-    workspace_id: str
-    user_id: str
+UPLOAD_READ_CHUNK_SIZE = 1024 * 1024
 
 
 def get_document_read_service() -> Iterator[DocumentReadService]:
@@ -50,15 +45,6 @@ def get_document_read_service() -> Iterator[DocumentReadService]:
             yield DocumentReadService.from_session(session)
     except DatabaseConfigurationError as exc:
         raise ApiError(message=str(exc)) from exc
-
-
-def get_upload_request_context(
-    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
-) -> UploadRequestContext:
-    return UploadRequestContext(
-        workspace_id=auth_context.workspace_id,
-        user_id=auth_context.user_id,
-    )
 
 
 def get_document_lifecycle_service() -> Iterator[DocumentLifecycleService]:
@@ -77,9 +63,30 @@ def get_background_job_service() -> Iterator[BackgroundJobService]:
         raise ApiError(message=str(exc)) from exc
 
 
+async def read_upload_with_size_limit(file: UploadFile, *, max_upload_size_bytes: int) -> bytes:
+    chunks: list[bytes] = []
+    actual_size_bytes = 0
+
+    while True:
+        chunk = await file.read(UPLOAD_READ_CHUNK_SIZE)
+        if not chunk:
+            break
+        actual_size_bytes += len(chunk)
+        if actual_size_bytes > max_upload_size_bytes:
+            raise FileTooLargeApiError(
+                details={
+                    "max_upload_size_bytes": max_upload_size_bytes,
+                    "actual_size_bytes": actual_size_bytes,
+                }
+            )
+        chunks.append(chunk)
+
+    return b"".join(chunks)
+
+
 @router.get("", response_model=list[DocumentListItem])
 def list_documents(
-    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -103,7 +110,7 @@ def list_documents(
 @router.get("/{document_id}", response_model=DocumentDetail)
 def get_document(
     document_id: str,
-    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
 ) -> DocumentDetail:
     try:
@@ -119,7 +126,7 @@ def get_document(
 @router.get("/{document_id}/versions", response_model=list[DocumentVersionSummary])
 def list_document_versions(
     document_id: str,
-    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
 ) -> list[DocumentVersionSummary]:
     try:
@@ -133,7 +140,7 @@ def list_document_versions(
 @router.get("/{document_id}/chunks", response_model=list[DocumentChunkPreview])
 def list_document_chunks(
     document_id: str,
-    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
 ) -> list[DocumentChunkPreview]:
@@ -148,7 +155,7 @@ def list_document_chunks(
 @router.patch("/{document_id}/archive", response_model=DocumentLifecycleResponse)
 def archive_document(
     document_id: str,
-    _auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    _auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentLifecycleService, Depends(get_document_lifecycle_service)],
 ) -> DocumentLifecycleResponse:
     try:
@@ -168,7 +175,7 @@ def archive_document(
 @router.patch("/{document_id}/restore", response_model=DocumentLifecycleResponse)
 def restore_document(
     document_id: str,
-    _auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    _auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentLifecycleService, Depends(get_document_lifecycle_service)],
 ) -> DocumentLifecycleResponse:
     try:
@@ -188,7 +195,7 @@ def restore_document(
 @router.delete("/{document_id}", response_model=DocumentLifecycleResponse)
 def delete_document(
     document_id: str,
-    _auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    _auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentLifecycleService, Depends(get_document_lifecycle_service)],
 ) -> DocumentLifecycleResponse:
     try:
@@ -207,35 +214,30 @@ def delete_document(
 async def import_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    request_context: Annotated[UploadRequestContext, Depends(get_upload_request_context)] = None,
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)] = None,
     job_service: Annotated[BackgroundJobService, Depends(get_background_job_service)] = None,
 ) -> JobResponse:
     start_time = perf_counter()
-    bind_observability_context(workspace_id=request_context.workspace_id, user_id=request_context.user_id)
+    bind_observability_context(workspace_id=auth_context.workspace_id, user_id=auth_context.user_id)
     filename = file.filename or "untitled"
     mime_type = canonical_mime_type(filename, file.content_type)
-    source_bytes = await file.read()
-    if len(source_bytes) > settings.max_upload_file_size_bytes:
+    try:
+        source_bytes = await read_upload_with_size_limit(file, max_upload_size_bytes=settings.max_upload_size_bytes)
+    except FileTooLargeApiError:
         duration_ms = int((perf_counter() - start_time) * 1000)
         log_event(
             "document_upload_failed",
-            workspace_id=request_context.workspace_id,
-            user_id=request_context.user_id,
+            workspace_id=auth_context.workspace_id,
+            user_id=auth_context.user_id,
             duration_ms=duration_ms,
             status="failed",
             error_code="FILE_TOO_LARGE",
         )
-        raise FileTooLargeApiError(
-            details={
-                "filename": filename,
-                "max_file_size_bytes": settings.max_upload_file_size_bytes,
-                "received_file_size_bytes": len(source_bytes),
-            }
-        )
+        raise
     temp_file_path = BackgroundJobService.create_temp_upload_file(filename=filename, source_bytes=source_bytes)
     job = job_service.enqueue_import_job(
-        workspace_id=request_context.workspace_id,
-        requested_by_user_id=request_context.user_id,
+        workspace_id=auth_context.workspace_id,
+        requested_by_user_id=auth_context.user_id,
         filename=filename,
         mime_type=mime_type,
         temp_file_path=temp_file_path,
@@ -247,7 +249,7 @@ async def import_document(
 @router.get("/import-jobs/{job_id}", response_model=JobResponse)
 def get_import_job(
     job_id: str,
-    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
     job_service: Annotated[BackgroundJobService, Depends(get_background_job_service)],
 ) -> JobResponse:
     try:

@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     database_url: str | None = None
     default_workspace_id: str = "00000000-0000-0000-0000-000000000001"
     default_user_id: str = "00000000-0000-0000-0000-000000000001"
-    max_upload_file_size_bytes: int = 10 * 1024 * 1024
+    max_upload_size_bytes: int = 50 * 1024 * 1024
     admin_api_token: str = "local-admin-token"
     import_jobs_temp_dir: str | None = None
 
