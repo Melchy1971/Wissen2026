@@ -6,7 +6,8 @@ from hashlib import pbkdf2_hmac, sha256
 from secrets import token_urlsafe
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import cast, select
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.models.documents import AuthSession, User, WorkspaceMembership
@@ -59,6 +60,12 @@ class AuthService:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    def _uuid_param(self, value: str):
+        bind = self._session.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            return cast(str(value), postgresql.UUID(as_uuid=False))
+        return value
+
     def login(self, *, login: str, password: str) -> tuple[str, AuthSession, User, list[WorkspaceMembership]]:
         normalized_login = login.strip()
         if not normalized_login or not password.strip():
@@ -71,7 +78,7 @@ class AuthService:
         memberships = list(
             self._session.scalars(
                 select(WorkspaceMembership)
-                .where(WorkspaceMembership.user_id == user.id)
+                .where(WorkspaceMembership.user_id == self._uuid_param(str(user.id)))
                 .order_by(WorkspaceMembership.workspace_id.asc())
             )
         )
@@ -80,7 +87,7 @@ class AuthService:
         token = token_urlsafe(32)
         auth_session = AuthSession(
             id=str(uuid4()),
-            user_id=user.id,
+            user_id=str(user.id),
             token_hash=hash_token(token),
             expires_at=now + timedelta(hours=12),
             created_at=now,
@@ -104,30 +111,39 @@ class AuthService:
         if auth_session is None or auth_session.revoked_at is not None or expires_at is None or expires_at <= now:
             raise AuthenticationError("Authentication required")
 
-        user = self._session.get(User, auth_session.user_id)
+        user = self._session.scalar(
+            select(User).where(User.id == self._uuid_param(str(auth_session.user_id)))
+        )
         if user is None or not user.is_active or not user.login:
             raise AuthenticationError("Authentication required")
 
         membership = self._session.scalar(
             select(WorkspaceMembership).where(
-                WorkspaceMembership.user_id == user.id,
-                WorkspaceMembership.workspace_id == normalized_workspace_id,
+                WorkspaceMembership.user_id == self._uuid_param(str(user.id)),
+                WorkspaceMembership.workspace_id == self._uuid_param(normalized_workspace_id),
             )
         )
         if membership is None:
             raise WorkspaceAccessError("Workspace access forbidden")
+
+        session_id = str(auth_session.id)
+        user_id = str(user.id)
+        user_login = user.login
+        user_display_name = user.display_name
+        workspace_id = str(membership.workspace_id)
+        role = membership.role
 
         auth_session.last_seen_at = now
         self._session.add(auth_session)
         self._session.commit()
 
         return AuthenticatedContext(
-            session_id=auth_session.id,
-            user_id=user.id,
-            login=user.login,
-            display_name=user.display_name,
-            workspace_id=membership.workspace_id,
-            role=membership.role,
+            session_id=session_id,
+            user_id=user_id,
+            login=user_login,
+            display_name=user_display_name,
+            workspace_id=workspace_id,
+            role=role,
         )
 
     def _normalize_datetime(self, value: datetime | None) -> datetime | None:

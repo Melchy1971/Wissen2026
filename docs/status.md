@@ -183,36 +183,35 @@ In Scope fuer M4:
 
 Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
 
-- Ein vollstaendiges M4a-Auth-Modell mit Login, Logout, Session, Memberships und serverseitig aufgeloestem `current_user`/`current_workspace` ist im vorliegenden Code **nicht** nachweisbar.
-- Implementiert ist derzeit nur ein schmaler Admin-Schutz fuer den Search-Index-Rebuild ueber `x-admin-token`.
-- Workspace-Bezug ist im Fachvertrag sichtbar, wird aber fuer die meisten Endpunkte weiterhin ueber `workspace_id` in Query oder Body transportiert.
-- Der Upload verwendet noch einen serverseitigen Default-Kontext aus `settings.default_workspace_id` und `settings.default_user_id`.
-- Frontend-Routen wie Dokumente und Chat arbeiten weiterhin mit `workspace_id` im Query-String; Teile der GUI fallen auf einen hart codierten Default-Workspace zurueck.
+- Ein technischer M4a-Auth-Kern ist im Backend nachweisbar.
+- Implementiert sind Auth-Middleware, Auth-Session-Pruefung, Workspace-Membership-Pruefung sowie serverseitig aufgeloester Request-Kontext fuer geschuetzte Endpunkte.
+- `POST /api/v1/auth/login` und `GET /api/v1/auth/me` sind im Code vorhanden.
+- Der Upload ist auth-gebunden und verwendet keinen Default-Workspace-/Default-User-Fallback mehr.
+- Teile des Frontends, insbesondere Chat und Admin-Diagnostik, verwenden weiterhin alte Query-/Token-Modelle und halten M4a insgesamt offen.
 
 Betroffene Endpunkte im aktuellen Stand:
 
-- `GET /documents?workspace_id=...`
 - `POST /documents/import`
-- `GET /api/v1/search/chunks?workspace_id=...`
+- `GET /documents`
+- `GET /api/v1/search/chunks`
 - `POST /api/v1/chat/sessions`
-- `GET /api/v1/chat/sessions?workspace_id=...`
+- `GET /api/v1/chat/sessions`
 - `POST /api/v1/chat/sessions/{session_id}/messages`
-- `POST /api/v1/admin/search-index/rebuild` mit `x-admin-token`
+- `POST /api/v1/admin/search-index/rebuild`
 
 Nachweisbare Fehlercodes mit M4a-Bezug:
 
-- `WORKSPACE_REQUIRED`
 - `AUTH_REQUIRED`
+- `AUTH_INVALID_CREDENTIALS`
+- `WORKSPACE_ACCESS_FORBIDDEN`
 - `ADMIN_REQUIRED`
+- `WORKSPACE_REQUIRED`
 
 Bekannte Einschraenkungen:
 
-- keine implementierten Endpunkte `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
-- keine nachweisbare Tabelle `auth_sessions`
-- keine nachweisbare Tabelle `workspace_memberships`
-- keine serverseitige Membership-Pruefung fuer Dokument-, Search- oder Chat-Endpunkte
+- `POST /api/v1/auth/logout` ist nicht implementiert
 - keine CSRF- oder Cookie-Session-Implementierung
-- Frontend vertraut weiterhin auf `workspace_id` im URL-Kontext
+- Frontend vertraut fuer Chat und Teile der Navigation weiterhin auf `workspace_id` im URL-Kontext
 
 Nicht-Scope, das weiterhin nicht geliefert ist:
 
@@ -234,9 +233,11 @@ Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
 
 - Die Upload-GUI ist in der Dokumentuebersicht implementiert und nutzt den asynchronen Importpfad mit Hintergrundjob-Polling.
 - `POST /documents/import` liefert `202 Accepted` mit einem `document_import`-Job; die GUI pollt anschliessend den Jobstatus.
-- Erfolgreiche Importe werden in der GUI als generischer Erfolg mit Dateiname, Dokument-ID und Chunk-Anzahl angezeigt.
+- Erfolgreiche Importe werden in der GUI mit Dateiname, Dokument-ID, `import_status`, Chunk-Anzahl und bei Bedarf Duplicate-Hinweis angezeigt.
 - Fehler aus dem Importpfad werden nicht mehr synchron am Upload-Endpunkt erwartet, sondern erscheinen als `failed`-Job mit `error_code` und `error_message`.
-- Duplicate- und OCR-Faelle sind im Backend und in Tests nachweisbar, aber in der GUI nicht als eigene spezialisierte Ergebnisflaechen umgesetzt.
+- Duplicate-, Parser- und OCR-Faelle sind im Backend und in Tests nachweisbar; die GUI zeigt Duplicate als Erfolgstext und Parser-/OCR-Faelle ueber gemappte Fehlerzustande an.
+- Der Upload ist auth-gebunden; Workspace und Benutzer kommen aus dem serverseitigen Auth-Kontext.
+- Der serverseitige Default-Workspace-/Default-User-Fallback ist aus dem Upload-Flow entfernt.
 
 Upload-Flow im aktuellen Stand:
 
@@ -253,17 +254,22 @@ Importstatus im aktuellen Stand:
 
 Nachweisbare Fehlercodes mit M4b-Bezug:
 
-- `FILE_TOO_LARGE`
 - `UNSUPPORTED_FILE_TYPE`
+- `FILE_TOO_LARGE`
 - `PARSER_FAILED`
 - `OCR_REQUIRED`
+- `DUPLICATE_DOCUMENT` im Backend-Fehlerkanon, aktuell nicht der normale Upload-Erfolgsvertrag
+- `IMPORT_FAILED` fuer unerwartete Importfehler im Jobpfad
 - `JOB_NOT_FOUND`
 - `NETWORK_ERROR` im Frontend-Mapping
+- `AUTH_REQUIRED`
+- `WORKSPACE_ACCESS_FORBIDDEN`
 
 Duplicate-Verhalten:
 
 - Duplicate Detection ist im Backend nachweisbar und liefert `import_status = duplicate` sowie `duplicate_of_document_id`.
-- Die aktuelle GUI behandelt den Abschlussfall aber generisch und zeigt keinen dedizierten Duplicate-Hinweis oder eine gesonderte Aktion fuer das vorhandene Dokument.
+- Die aktuelle GUI zeigt den Abschlussfall als Erfolg mit Text `bereits vorhanden` und zeigt `duplicate_of_document_id` an.
+- Ein eigener Deep-Link oder eine gesonderte Aktion fuer das vorhandene Dokument ist weiterhin nicht implementiert.
 
 OCR-required-Verhalten:
 
@@ -273,11 +279,16 @@ OCR-required-Verhalten:
 Bekannte Einschraenkungen:
 
 - kein Direkt-Sprung in die Dokumentdetailansicht nach erfolgreichem Import
-- kein dedizierter Duplicate-Ergebniszustand
-- kein dedizierter OCR-Ergebniszustand
+- keine Darstellung von `warnings` im Upload-Ergebnis
 - Polling ohne exponentielles Backoff oder sichtbare Retry-Strategie
-- Upload nutzt serverseitig weiterhin den Default-Workspace- und Default-User-Kontext
-- Dokumentseite faellt im Frontend weiterhin auf einen Default-Workspace im Query-Kontext zurueck
+- Dokumentseite nutzt den zentralen Request-Kontext fuer Upload und Dokumentliste
+- andere Frontend-Teile, insbesondere Chat und Link-Navigation, verwenden weiterhin `workspace_id` im Query-Kontext
+
+Teststatus fuer M4b am 2026-05-05:
+
+- Pflicht-Uploadtests laufen ohne Skip und decken `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, Parserfehler, OCR-Bedarf, Upload ohne Auth, Upload in fremdem Workspace und sequential duplicate ab.
+- Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist als einziger optionaler Test isoliert.
+- Aktueller Status des PostgreSQL-Race-Tests: optional `skipped`, weil die zugrunde liegende Migrationskette derzeit nicht vollstaendig aufloesbar ist.
 
 Abschlussbewertung fuer M4b:
 

@@ -410,8 +410,11 @@ Erlaubte Typen:
 ### Aktueller realer Stand
 
 - Der jobbasierte Uploadpfad ist im Backend und in Teilen der GUI implementiert.
-- Standardfehler und einfache Erfolgsfaelle sind nachweisbar.
-- M4b ist nicht abgeschlossen, solange Duplicate-Parallelitaet, veraltete Upload-Annahmen und GUI/API-Drift nicht bereinigt sind.
+- Standardfehler, Auth-Bindung und einfache Erfolgsfaelle sind nachweisbar.
+- Der Upload ist auth-gebunden; Workspace und Benutzer kommen aus dem serverseitigen Auth-Kontext.
+- Default-Workspace-/Default-User-Fallbacks sind im Upload-Flow nicht aktiv.
+- Der PostgreSQL-Integrationstest fuer parallele Duplicate-Uploads ist nachweisbar gruen.
+- M4b ist nicht abgeschlossen, solange GUI/API-Drift, unvollstaendige Ergebnisdarstellung und verbleibende Upload-Annahmen ausserhalb des stabilisierten Kernvertrags nicht bereinigt sind.
 
 ### Freigabekriterien
 
@@ -420,6 +423,11 @@ Erlaubte Typen:
 - Duplicate-Verhalten ist auch unter Parallelitaet sauber
 - GUI und Backend-Vertrag sind deckungsgleich
 - Fehlercodes sind sichtbar, korrekt gemappt und stabil
+- Dokumentation behauptet kein nicht implementiertes Upload-Verhalten
+
+### Nachweisstand
+
+- `pytest tests/integration/test_documents_import.py` ist aktuell gruen und deckt parallele Duplicate-Uploads gegen PostgreSQL ab.
 
 ### Stop-Regeln fuer M4b
 

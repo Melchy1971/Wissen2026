@@ -6,6 +6,14 @@ Stand: 2026-05-05
 
 Der aktuelle Uploadpfad ist asynchron. Die GUI importiert keine Datei mehr synchron ueber einen direkten Fachresponse, sondern ueber einen persistierten Hintergrundjob.
 
+Sicherheitsgrenzen:
+
+- Der Upload ist auth-gebunden.
+- Workspace und Benutzer kommen aus dem serverseitigen Auth-Kontext.
+- Ein Default-Workspace-/Default-User-Fallback ist im Upload-Flow nicht aktiv.
+- Upload ohne Auth endet mit `401 AUTH_REQUIRED`.
+- Upload in fremdem Workspace endet mit `403 WORKSPACE_ACCESS_FORBIDDEN`.
+
 Flow:
 
 1. Benutzer waehlt in der Dokumentansicht genau eine Datei aus.
@@ -45,12 +53,18 @@ Direkt am Upload-Endpoint:
 
 - `FILE_TOO_LARGE`
 - `UNSUPPORTED_FILE_TYPE`
+- `AUTH_REQUIRED`
+- `WORKSPACE_ACCESS_FORBIDDEN`
 
 Im Jobstatus:
 
 - `PARSER_FAILED`
 - `OCR_REQUIRED`
 - `IMPORT_FAILED`
+
+Im Backend-Fehlerkanon:
+
+- `DUPLICATE_DOCUMENT` ist vorhanden, ist aber nicht der normale Erfolgsvertrag fuer Duplicate-Uploads.
 
 Bei Statusabfrage:
 
@@ -65,7 +79,7 @@ Im Frontend-Mapping:
 - Duplicate Detection ist serverseitig implementiert.
 - Ein Duplicate fuehrt nicht zu einem fehlgeschlagenen Job, sondern zu einem erfolgreichen Abschluss mit `result.import_status = duplicate`.
 - `result.duplicate_of_document_id` verweist auf das bestehende Dokument.
-- Das aktuelle Frontend zeigt diesen Fall jedoch nur als generischen Erfolgszustand an.
+- Das aktuelle Frontend zeigt diesen Fall als Erfolg mit dem Hinweis `bereits vorhanden` und zeigt die bestehende Dokument-ID an.
 
 ## OCR-required-Verhalten
 
@@ -79,10 +93,26 @@ Im Frontend-Mapping:
 - kein Drag-and-drop
 - kein Byte-Fortschritt, nur Jobstatus
 - kein Direkt-Sprung in die Dokumentdetailansicht nach Erfolg
-- kein dedizierter Duplicate-Ergebniszustand
-- kein dedizierter OCR-Ergebniszustand
-- Upload laeuft weiterhin im serverseitigen Default-Workspace-/Default-User-Kontext
-- Dokumentansicht faellt weiterhin auf einen Default-Workspace im Frontend zurueck
+- keine Darstellung von `warnings` im Upload-Ergebnis
+- Dokumentansicht nutzt fuer den Upload den zentralen Request-Kontext; andere Frontend-Teile verwenden weiterhin `workspace_id` im Query-Kontext
+
+## Teststatus
+
+Pflicht-Tests:
+
+- `unsupported file type`
+- `broken parser`
+- `OCR required`
+- `file too large`
+- `upload without auth`
+- `upload foreign workspace`
+- `duplicate upload sequential`
+
+Status:
+
+- Die Pflicht-Uploadtests laufen ohne Skip im API-Testlauf.
+- Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist als einziger optionaler Test isoliert.
+- Aktueller Status des PostgreSQL-Race-Tests: `skipped`, weil die PostgreSQL-Migrationsvoraussetzungen derzeit nicht vollstaendig verfuegbar sind.
 
 ## Abschlussentscheidung fuer M4b
 

@@ -129,28 +129,56 @@ cd backend
 pytest
 ```
 
-Die erste Testbasis prueft App-Import und Healthchecks. Lokale Tests benoetigen keine
-PostgreSQL-Verbindung; fehlende DB-Konfiguration wird kontrolliert als Servicefehler erwartet.
+Unit-Tests benoetigen keine Datenbankverbindung und laufen ohne Konfiguration durch.
+Integrationstests, die PostgreSQL erfordern, sind mit `@pytest.mark.postgres` markiert.
+Sie werden im Standard-`pytest`-Lauf uebersprungen, wenn `TEST_DATABASE_URL` nicht gesetzt ist.
 
-Migrationstests ohne DB pruefen Alembic-Struktur und eindeutige Revisionen. Mit
-`TEST_DATABASE_URL` wird ein echter Upgrade-/Downgrade-Lauf gegen PostgreSQL ausgefuehrt:
+### Postgres-Tests lokal ausfuehren
+
+**Option 1 — dedizierte Test-Datenbank per Docker Compose (empfohlen):**
+
+```bash
+# Einmalig starten (Projektverzeichnis, nicht backend/)
+docker compose -f docker-compose.test.yml up -d --wait
+
+# Tests ausfuehren
+cd backend
+$env:TEST_DATABASE_URL="postgresql://testuser:testpass@localhost:5433/wissen_test"
+pytest -m postgres -v
+
+# Aufraumen
+cd ..
+docker compose -f docker-compose.test.yml down
+```
+
+**Option 2 — vorhandene PostgreSQL-Instanz:**
 
 ```bash
 cd backend
-$env:TEST_DATABASE_URL="postgresql+psycopg://user:password@host:5432/test_database"
-pytest tests/integration/test_migrations.py
+$env:TEST_DATABASE_URL="postgresql://user:password@host:5432/test_database"
+pytest -m postgres -v
 ```
 
-`TEST_DATABASE_URL` muss auf eine dedizierte Testdatenbank zeigen, da der Test auf `base`
-downgradet und Tabellen entfernt.
+`TEST_DATABASE_URL` muss auf eine **dedizierte Testdatenbank** zeigen.
+Der Test fuehrt `alembic downgrade base` aus und entfernt dabei alle Tabellen.
 
-Import-Integrationstests nutzen dieselbe Voraussetzung und pruefen `POST /documents/import` fuer
-TXT/Markdown inklusive Dokumentversionen, Chunks und Duplikaterkennung:
+### Race-Test fuer doppelte Uploads
+
+`tests/integration/test_documents_import.py::test_parallel_duplicate_imports_create_single_document`
+prueft, dass zwei gleichzeitige Uploads derselben Datei genau ein Dokument erzeugen und kein
+`IntegrityError` nach aussen gelangt:
 
 ```bash
 cd backend
-pytest tests/integration/test_documents_import.py
+$env:TEST_DATABASE_URL="postgresql://testuser:testpass@localhost:5433/wissen_test"
+pytest tests/integration/test_documents_import.py -v
 ```
+
+### CI
+
+Im CI laufen die Postgres-Tests in einem eigenen Job `backend-postgres` mit einem
+PostgreSQL-Service-Container. Der Haupt-`backend`-Job (Unit-Tests) laeuft weiterhin ohne
+Datenbankabhaengigkeit.
 
 ## V1-Grenzen
 

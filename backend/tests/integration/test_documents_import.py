@@ -76,6 +76,7 @@ def make_client() -> TestClient:
     )
 
 
+@pytest.mark.postgres
 def test_parallel_duplicate_imports_create_single_document(monkeypatch) -> None:
     test_database_url = require_test_database_url()
     monkeypatch.setattr(settings, "database_url", test_database_url)

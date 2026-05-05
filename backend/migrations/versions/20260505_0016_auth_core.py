@@ -1,7 +1,7 @@
 """add auth core tables and user credentials
 
 Revision ID: 20260505_0016
-Revises: 20260505_0015_background_jobs
+Revises: 20260505_0015
 Create Date: 2026-05-05
 """
 
@@ -9,10 +9,11 @@ from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = "20260505_0016"
-down_revision: str | None = "20260505_0015_background_jobs"
+down_revision: str | None = "20260505_0015"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -26,8 +27,8 @@ def upgrade() -> None:
     op.create_table(
         "workspace_memberships",
         sa.Column("id", sa.String(), nullable=False),
-        sa.Column("workspace_id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("workspace_id", postgresql.UUID(as_uuid=False), nullable=False),
+        sa.Column("user_id", postgresql.UUID(as_uuid=False), nullable=False),
         sa.Column("role", sa.String(length=32), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -41,7 +42,7 @@ def upgrade() -> None:
     op.create_table(
         "auth_sessions",
         sa.Column("id", sa.String(), nullable=False),
-        sa.Column("user_id", sa.String(), nullable=False),
+        sa.Column("user_id", postgresql.UUID(as_uuid=False), nullable=False),
         sa.Column("token_hash", sa.String(length=128), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),

@@ -1,5 +1,6 @@
 import os
 from collections.abc import Iterator
+from datetime import UTC, datetime
 import logging
 
 import psycopg
@@ -12,10 +13,12 @@ from sqlalchemy.orm import Session
 from app.api.v1 import search as search_api
 from app.core.config import settings
 from app.main import app
+from app.services.auth import hash_password, hash_token
 from app.services.search_index_service import SearchIndexRebuildService
 from app.services.search_service import SearchService
 from tests.integration.test_migrations import make_alembic_config, psycopg_url
 
+pytestmark = pytest.mark.postgres
 
 # ---------------------------------------------------------------------------
 # Test IDs: deterministic UUIDs that never collide with migration seeds
@@ -72,6 +75,8 @@ CHUNK_RANK_ID_HIGH    = "e4100000-0000-0000-0000-000000000007"
 
 RANKING_QUERY = "rankingterm orderterm"
 RANKING_BASE_CONTENT = "rankingterm orderterm baseline"
+
+SESSION_TOKEN = "m3b-search-session-token"
 
 
 # ---------------------------------------------------------------------------
@@ -358,6 +363,38 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
             (DOC_ARCHIVED_ID,),
         )
 
+        created = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
+        cur.execute(
+            "UPDATE users SET login=%s, password_hash=%s, is_active=true WHERE id=%s::uuid",
+            ("m3b-user", hash_password("secret", salt="m3bsalt"), USER_ID),
+        )
+        cur.execute("DELETE FROM auth_sessions WHERE user_id = %s::uuid", (USER_ID,))
+        cur.execute("DELETE FROM workspace_memberships WHERE user_id = %s::uuid", (USER_ID,))
+        cur.executemany(
+            """
+            INSERT INTO workspace_memberships (id, workspace_id, user_id, role, created_at, updated_at)
+            VALUES (%s, %s::uuid, %s::uuid, 'owner', %s, %s)
+            """,
+            [
+                ("m3b-membership-1", WORKSPACE_ID, USER_ID, created, created),
+                ("m3b-membership-2", OTHER_WS_ID, USER_ID, created, created),
+            ],
+        )
+        cur.execute(
+            """
+            INSERT INTO auth_sessions (id, user_id, token_hash, expires_at, created_at, last_seen_at, revoked_at)
+            VALUES (%s, %s::uuid, %s, %s, %s, %s, NULL)
+            """,
+            (
+                "m3b-session-1",
+                USER_ID,
+                hash_token(SESSION_TOKEN),
+                datetime(2036, 5, 1, 10, 0, tzinfo=UTC),
+                created,
+                created,
+            ),
+        )
+
     conn.commit()
 
 
@@ -407,7 +444,10 @@ def client(search_test_setup, pg_engine) -> Iterator[TestClient]:
 
     app.dependency_overrides[search_api.get_search_service] = override_search_service
     try:
-        yield TestClient(app)
+        yield TestClient(app, headers={
+            "Authorization": f"Bearer {SESSION_TOKEN}",
+            "X-Workspace-Id": WORKSPACE_ID,
+        })
     finally:
         app.dependency_overrides.clear()
 
@@ -577,7 +617,8 @@ def test_search_finds_chunk_in_correct_workspace(client: TestClient) -> None:
     # Querying OTHER_WS_ID for the same term must find exactly the right chunk
     response = client.get(
         "/api/v1/search/chunks",
-        params={"workspace_id": OTHER_WS_ID, "q": "exclusiveterm"},
+        params={"q": "exclusiveterm"},
+        headers={"X-Workspace-Id": OTHER_WS_ID},
     )
 
     assert response.status_code == 200

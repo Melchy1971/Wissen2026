@@ -1,0 +1,16 @@
+services:
+  testdb:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+      POSTGRES_DB: wissen_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d wissen_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 10

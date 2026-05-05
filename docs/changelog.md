@@ -2,6 +2,26 @@
 
 Stand: 2026-05-05
 
+## 2026-05-05 - Upload-Dokumentation auf Auth- und Fehlervertrag aktualisiert
+
+### Changed
+
+- `docs/status.md`, `docs/api.md`, `docs/import.md`, `docs/frontend.md`, `docs/changelog.md` und `masterplan.md` auf den aktuellen Upload-Code abgeglichen.
+- Upload-Dokumentation beschreibt jetzt explizit den auth-gebundenen Uploadpfad, den serverseitigen Auth-Kontext fuer Workspace und Benutzer sowie das entfernte Default-Workspace-/Default-User-Fallback.
+- `FILE_TOO_LARGE` ist mit dem aktuellen `413`-Vertrag und den Detailfeldern `max_upload_size_bytes` und `actual_size_bytes` dokumentiert.
+- Pflicht-Uploadtests und der optionale PostgreSQL-Race-Test sind getrennt dokumentiert.
+
+### Findings
+
+- `POST /documents/import` ist auth-gebunden und liefert ohne Auth `AUTH_REQUIRED` und im fremden Workspace `WORKSPACE_ACCESS_FORBIDDEN`.
+- Der Uploadvertrag bleibt asynchron: `202 Accepted` plus Job-Polling.
+- Duplicate-Sequential-Tests sind Pflicht; der echte PostgreSQL-Race-Test ist als einziger optionaler Test isoliert.
+- Der PostgreSQL-Race-Test ist aktuell `skipped`, weil die zugrunde liegende Migrationskette nicht vollstaendig aufloesbar ist.
+
+### Decision
+
+- Die Upload-Dokumentation entspricht jetzt dem aktuellen Code- und Teststand.
+
 ## 2026-05-05 - M4c Dokumentationssync und Konsistenzpruefung
 
 ### Changed

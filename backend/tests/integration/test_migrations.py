@@ -48,6 +48,7 @@ def test_database_url() -> str:
     return database_url
 
 
+@pytest.mark.postgres
 def test_migrations_upgrade_downgrade_on_test_database(test_database_url, monkeypatch) -> None:
     monkeypatch.setattr(settings, "database_url", test_database_url)
     config = make_alembic_config()
@@ -107,6 +108,7 @@ def test_migrations_upgrade_downgrade_on_test_database(test_database_url, monkey
             assert cursor.fetchone() == (None,)
 
 
+@pytest.mark.postgres
 def test_chunk_search_vector_migration_creates_generated_column_and_gin_index(test_database_url, monkeypatch) -> None:
     monkeypatch.setattr(settings, "database_url", test_database_url)
     config = make_alembic_config()

@@ -188,19 +188,30 @@ Alle Fehler folgen dem Standardformat:
 
 | HTTP Status | Code | Aktueller Einsatz |
 |---:|---|---|
-| `401` | `AUTH_REQUIRED` | Admin-Rebuild ohne `x-admin-token` |
-| `403` | `ADMIN_REQUIRED` | Admin-Rebuild mit falschem `x-admin-token` |
-| `422` | `WORKSPACE_REQUIRED` | Dokument-, Search- oder Chat-Requests ohne `workspace_id` |
+| `401` | `AUTH_REQUIRED` | geschuetzter Endpoint ohne gueltige Authentifizierung |
+| `401` | `AUTH_INVALID_CREDENTIALS` | Login mit ungueltigen Zugangsdaten |
+| `403` | `WORKSPACE_ACCESS_FORBIDDEN` | authentifiziert, aber kein Zugriff auf den angefragten Workspace |
+| `403` | `ADMIN_REQUIRED` | authentifiziert, aber ohne Admin-/Owner-Rolle |
+| `422` | `WORKSPACE_REQUIRED` | fehlender Header `x-workspace-id` |
 
-Bekannte Einschraenkung:
+Hinweis:
 
-- Ein fachlicher Fehlercode wie `WORKSPACE_ACCESS_FORBIDDEN` ist im aktuellen Code nicht nachweisbar, weil Membership-Pruefung noch nicht implementiert ist.
+- Die generischen Begriffe `UNAUTHORIZED` und `FORBIDDEN` werden im aktuellen Code nicht als eigene Fehlercodes ausgeliefert.
+- Die konkrete Implementierung mappt `UNAUTHORIZED` auf `AUTH_REQUIRED` oder `AUTH_INVALID_CREDENTIALS` und `FORBIDDEN` auf `WORKSPACE_ACCESS_FORBIDDEN` oder `ADMIN_REQUIRED`.
 
 ## Upload Contract
 
 ### `POST /documents/import`
 
 Importiert genau eine Datei ueber den bestehenden Dokument-Importpfad.
+
+Sicherheitsgrenzen im aktuellen Stand:
+
+- Der Endpoint ist auth-gebunden.
+- `workspace_id` und `requested_by_user_id` kommen aus dem serverseitigen Auth-Kontext.
+- Ein serverseitiger Default-Workspace-/Default-User-Fallback ist im Upload-Flow nicht aktiv.
+- Upload ohne Auth liefert `401 AUTH_REQUIRED`.
+- Upload in fremdem Workspace liefert `403 WORKSPACE_ACCESS_FORBIDDEN`.
 
 Upload-Flow im aktuellen Stand:
 
@@ -358,6 +369,38 @@ Fehlerformat:
 ```
 
 Relevante Fehlercodes:
+
+Direkt am Upload-Endpoint:
+
+- `UNSUPPORTED_FILE_TYPE`
+- `FILE_TOO_LARGE`
+- `AUTH_REQUIRED`
+- `WORKSPACE_ACCESS_FORBIDDEN`
+
+Im Jobstatus:
+
+- `PARSER_FAILED`
+- `OCR_REQUIRED`
+- `IMPORT_FAILED`
+
+Im allgemeinen Fehlerkanon:
+
+- `DUPLICATE_DOCUMENT` ist als Backend-Fehlerklasse vorhanden, wird im normalen Uploadvertrag aber nicht fuer erfolgreiche Duplicate-Faelle verwendet.
+
+`FILE_TOO_LARGE`-Details im aktuellen Vertrag:
+
+```json
+{
+  "error": {
+    "code": "FILE_TOO_LARGE",
+    "message": "Uploaded file exceeds the configured maximum size",
+    "details": {
+      "max_upload_size_bytes": 52428800,
+      "actual_size_bytes": 52428801
+    }
+  }
+}
+```
 
 | Status | Code | Bedeutung |
 |---:|---|---|

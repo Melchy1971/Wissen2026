@@ -4,7 +4,7 @@ Stand: 2026-05-05
 
 ## Status
 
-Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erweitert, fuer M3c um eine dokumentgestuetzte Chat-Oberflaeche ergaenzt und in M4 um Upload- sowie Admin-Diagnostik-Slices erweitert. Ein voll integriertes Auth-/Workspace-Modell im Sinne von M4a ist im vorliegenden Frontend aber noch nicht konsistent abgeschlossen.
+Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erweitert, fuer M3c um eine dokumentgestuetzte Chat-Oberflaeche ergaenzt und in M4 um Upload- sowie Admin-Diagnostik-Slices erweitert. Der Upload-Slice nutzt bereits den zentralen Auth-/Workspace-Kontext; ein voll integriertes Frontend-Modell fuer Chat, Admin und Navigation ist aber noch nicht konsistent abgeschlossen.
 
 ## Umgesetzter Scope
 
@@ -25,7 +25,7 @@ Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erw
 - Sichtbarer Quellenblock mit Citations.
 - Sichtbarer Insufficient-Context-Zustand.
 - Fehlerzustaende fuer `CHAT_SESSION_NOT_FOUND`, `CHAT_MESSAGE_INVALID`, `INSUFFICIENT_CONTEXT`, `RETRIEVAL_FAILED` und `LLM_UNAVAILABLE`.
-- POST-Message-Request gegen den echten Vertrag mit `workspace_id`, `question` und `retrieval_limit`.
+- POST-Message-Request im aktuellen Frontend weiterhin mit `workspace_id`, `question` und `retrieval_limit`.
 - POST-Message-Response wird als Assistant-Message mit Citations und Confidence gemappt.
 - Lade-, Leer- und Fehlerzustaende.
 - Sichtbare Fehlercodes im UI.
@@ -39,9 +39,12 @@ Nachweisbar implementiert:
 - Upload-Start direkt in der Dokumentansicht
 - Blockierung eines zweiten Uploads waehrend `loading` oder `polling`
 - Polling des generischen Jobstatus-Endpunkts
-- generische Erfolgsanzeige mit Dateiname, Dokument-ID und Chunk-Anzahl
+- Erfolgsanzeige mit Dateiname, Dokument-ID, `import_status` und Chunk-Anzahl
+- Duplicate-Hinweis `bereits vorhanden` inklusive Anzeige der vorhandenen Dokument-ID
 - generische Fehleranzeige ueber gemappte Fehlercodes wie `OCR_REQUIRED` und `PARSER_FAILED`
+- Fehleranzeige fuer `FILE_TOO_LARGE`
 - Neuladen der Dokumentliste nach erfolgreichem Abschluss
+- Upload-Anfragen nutzen den zentralen Request-Kontext mit `Authorization` und `X-Workspace-Id`
 
 Upload-Flow in der GUI:
 
@@ -55,12 +58,12 @@ Upload-Flow in der GUI:
 Importstatus im UI:
 
 - Jobstatuslabels: `In Warteschlange`, `Wird verarbeitet`, `Abgeschlossen`, `Fehlgeschlagen`
-- fachliche Importstatuswerte wie `chunked` oder `duplicate` werden aktuell nicht als eigene UI-Zustaende visualisiert
+- fachliche Importstatuswerte wie `chunked` oder `duplicate` werden im Ergebnistext sichtbar angezeigt
 
 Duplicate-Verhalten:
 
-- Der Backend-Fall ist nachweisbar, die GUI behandelt ihn aktuell aber wie einen generischen Erfolgsfall.
-- Es gibt keinen dedizierten Text wie `Dokument bereits vorhanden` und keine spezifische Aktion `Vorhandenes Dokument oeffnen`.
+- Der Backend-Fall ist nachweisbar und die GUI zeigt `Dokument bereits vorhanden` als Erfolgshinweis.
+- Es gibt weiterhin keine spezifische Aktion `Vorhandenes Dokument oeffnen`.
 
 OCR-required-Verhalten:
 
@@ -110,8 +113,7 @@ Aktuell verifiziert:
 - Keine GUI-Pagination fuer umfangreiche Suchtreffermengen.
 - Kein Browser-E2E-Test gegen einen laufenden Backend-Prozess; die aktuelle Absicherung erfolgt ueber Vitest/Fetch-Mocks gegen den echten API-Vertrag.
 - Kein Direktlink in die Dokumentdetailansicht nach erfolgreichem Upload.
-- Kein dedizierter Duplicate-Zustand im Upload-Ergebnis.
-- Kein dedizierter OCR-Zustand im Upload-Ergebnis.
+- Keine Darstellung von `warnings` im Upload-Ergebnis.
 - Polling nutzt festen 250-ms-Takt ohne Backoff.
 - Dokumente und Chat ziehen den Workspace weiterhin aus `workspace_id` im Query-String.
 - Dokumente und Chat fallen teilweise auf einen hart codierten Default-Workspace zurueck.
@@ -136,4 +138,4 @@ Nicht nachweisbar implementiert:
 
 ## Fazit
 
-Der Frontend-Schnitt deckt Dokumente, Suche, Chat sowie erste M4-Produktisierungs-Slices fuer Upload und Admin-Rebuild ab. Der Upload-Flow selbst ist sichtbar und testbar, M4b ist aber nicht konsistent abgeschlossen, weil zentrale Ergebniszustaende wie Duplicate, OCR-required und Direktnavigation ins Dokumentdetail in der GUI noch nicht spezifiziert umgesetzt sind.
+Der Frontend-Schnitt deckt Dokumente, Suche, Chat sowie erste M4-Produktisierungs-Slices fuer Upload und Admin-Rebuild ab. Der Upload-Flow selbst ist sichtbar und testbar, ist auth-gebunden und kompatibel mit dem aktuellen `202 + Jobstatus`-Vertrag. M4b ist aber noch nicht konsistent abgeschlossen, weil `warnings`, Direktnavigation ins Dokumentdetail und die Bereinigung alter Workspace-Query-Modelle noch offen sind.
