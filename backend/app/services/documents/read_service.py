@@ -37,15 +37,15 @@ class DocumentReadRepository(Protocol):
         include_archived: bool = False,
     ) -> list[DocumentListRecord]: ...
 
-    def get_document_detail(self, document_id: str) -> DocumentDetailRecord | None: ...
+    def get_document_detail(self, document_id: str, *, workspace_id: str) -> DocumentDetailRecord | None: ...
 
-    def get_versions(self, document_id: str) -> list[DocumentVersionRecord]: ...
+    def get_versions(self, document_id: str, *, workspace_id: str) -> list[DocumentVersionRecord]: ...
 
-    def get_latest_version_id(self, document_id: str) -> str | None: ...
+    def get_latest_version_id(self, document_id: str, *, workspace_id: str) -> str | None: ...
 
     def get_chunks(self, *, document_id: str, version_id: str, limit: int | None = None) -> list[DocumentChunkRecord]: ...
 
-    def document_exists(self, document_id: str) -> bool: ...
+    def document_exists(self, document_id: str, *, workspace_id: str) -> bool: ...
 
 
 class DocumentReadService:
@@ -89,8 +89,8 @@ class DocumentReadService:
             )
         ]
 
-    def get_document_detail(self, document_id: str) -> DocumentDetail:
-        record = self._repository.get_document_detail(document_id)
+    def get_document_detail(self, document_id: str, *, workspace_id: str) -> DocumentDetail:
+        record = self._repository.get_document_detail(document_id, workspace_id=workspace_id)
         if record is None:
             raise DocumentNotFoundError(document_id)
         if record.version_id is None and record.import_status in {"parsed", "chunked"}:
@@ -173,9 +173,9 @@ class DocumentReadService:
             ),
         )
 
-    def get_versions(self, document_id: str) -> list[DocumentVersionSummary]:
-        records = self._repository.get_versions(document_id)
-        if not records and not self._repository.document_exists(document_id):
+    def get_versions(self, document_id: str, *, workspace_id: str) -> list[DocumentVersionSummary]:
+        records = self._repository.get_versions(document_id, workspace_id=workspace_id)
+        if not records and not self._repository.document_exists(document_id, workspace_id=workspace_id):
             raise DocumentNotFoundError(document_id)
 
         return [
@@ -188,10 +188,10 @@ class DocumentReadService:
             for record in records
         ]
 
-    def get_chunks(self, document_id: str, *, limit: int | None = None) -> list[DocumentChunkPreview]:
-        latest_version_id = self._repository.get_latest_version_id(document_id)
+    def get_chunks(self, document_id: str, *, workspace_id: str, limit: int | None = None) -> list[DocumentChunkPreview]:
+        latest_version_id = self._repository.get_latest_version_id(document_id, workspace_id=workspace_id)
         if latest_version_id is None:
-            if not self._repository.document_exists(document_id):
+            if not self._repository.document_exists(document_id, workspace_id=workspace_id):
                 raise DocumentNotFoundError(document_id)
             return []
 

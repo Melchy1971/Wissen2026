@@ -163,7 +163,7 @@ class DocumentRepository:
             for row in rows
         ]
 
-    def get_document_detail(self, document_id: str) -> DocumentDetailRecord | None:
+    def get_document_detail(self, document_id: str, *, workspace_id: str) -> DocumentDetailRecord | None:
         chunk_count = (
             select(func.count(Chunk.id))
             .where(Chunk.document_id == Document.id, Chunk.document_version_id == Document.current_version_id)
@@ -220,7 +220,11 @@ class DocumentRepository:
                 last_chunk_id.label("last_chunk_id"),
             )
             .outerjoin(DocumentVersion, Document.current_version_id == DocumentVersion.id)
-            .where(Document.id == self._uuid_param(document_id), Document.lifecycle_status != "deleted")
+            .where(
+                Document.id == self._uuid_param(document_id),
+                Document.workspace_id == self._uuid_param(workspace_id),
+                Document.lifecycle_status != "deleted",
+            )
         ).one_or_none()
 
         if row is None:
@@ -256,7 +260,7 @@ class DocumentRepository:
             last_chunk_id=row.last_chunk_id,
         )
 
-    def get_versions(self, document_id: str) -> list[DocumentVersionRecord]:
+    def get_versions(self, document_id: str, *, workspace_id: str) -> list[DocumentVersionRecord]:
         rows = self._session.execute(
             select(
                 DocumentVersion.id,
@@ -266,6 +270,7 @@ class DocumentRepository:
             )
             .join(Document, Document.id == DocumentVersion.document_id)
             .where(DocumentVersion.document_id == self._uuid_param(document_id))
+            .where(Document.workspace_id == self._uuid_param(workspace_id))
             .where(Document.lifecycle_status != "deleted")
             .order_by(desc(DocumentVersion.created_at), desc(DocumentVersion.version_number))
         ).all()
@@ -280,10 +285,11 @@ class DocumentRepository:
             for row in rows
         ]
 
-    def get_latest_version_id(self, document_id: str) -> str | None:
+    def get_latest_version_id(self, document_id: str, *, workspace_id: str) -> str | None:
         return self._session.execute(
             select(Document.current_version_id).where(
                 Document.id == self._uuid_param(document_id),
+                Document.workspace_id == self._uuid_param(workspace_id),
                 Document.lifecycle_status != "deleted",
             )
         ).scalar_one_or_none()
@@ -319,11 +325,12 @@ class DocumentRepository:
             for row in rows
         ]
 
-    def document_exists(self, document_id: str) -> bool:
+    def document_exists(self, document_id: str, *, workspace_id: str) -> bool:
         return (
             self._session.execute(
                 select(Document.id).where(
                     Document.id == self._uuid_param(document_id),
+                    Document.workspace_id == self._uuid_param(workspace_id),
                     Document.lifecycle_status != "deleted",
                 )
             ).scalar_one_or_none()
@@ -335,10 +342,3 @@ class DocumentRepository:
             select(Document).where(Document.id == self._uuid_param(document_id), Document.lifecycle_status != "deleted")
         ).scalar_one_or_none()
 
-    def document_exists(self, document_id: str) -> bool:
-        return (
-            self._session.execute(
-                select(Document.id).where(Document.id == self._uuid_param(document_id)).limit(1)
-            ).scalar_one_or_none()
-            is not None
-        )

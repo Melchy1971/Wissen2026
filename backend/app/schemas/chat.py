@@ -15,7 +15,6 @@ class StrictChatModel(BaseModel):
 
 
 class ChatSessionCreateRequest(StrictChatModel):
-    workspace_id: str = Field(min_length=1)
     title: str | None = Field(default=None, min_length=1, max_length=500)
 
 
@@ -28,7 +27,6 @@ class ChatSessionSummary(StrictChatModel):
 
 
 class ChatMessageCreateRequest(StrictChatModel):
-    workspace_id: str = Field(min_length=1)
     question: str = Field(min_length=1)
     retrieval_limit: int = Field(default=8, ge=1, le=100)
 

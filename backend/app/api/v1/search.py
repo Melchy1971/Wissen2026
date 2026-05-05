@@ -3,6 +3,7 @@ from time import perf_counter
 
 from fastapi import APIRouter, Depends, Query
 
+from app.api.dependencies.auth import RequestAuthContext, require_workspace_member
 from app.core.database import DatabaseConfigurationError
 from app.core.errors import ApiError, InvalidQueryApiError, ServiceUnavailableApiError
 from app.db.session import get_session
@@ -24,13 +25,14 @@ def get_search_service() -> Iterator[SearchService]:
 
 @router.get("/chunks", response_model=list[SearchChunkResult])
 def search_chunks(
-    workspace_id: Annotated[str, Query(min_length=1)],
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     q: Annotated[str, Query(min_length=1)],
     service: Annotated[SearchService, Depends(get_search_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[SearchChunkResult]:
     start_time = perf_counter()
+    workspace_id = auth_context.workspace_id
     bind_observability_context(workspace_id=workspace_id)
     try:
         results = service.search_chunks(workspace_id=workspace_id, query=q, limit=limit, offset=offset, filters=None)

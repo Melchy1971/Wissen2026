@@ -30,6 +30,18 @@ class AuthRequiredApiError(ApiError):
     message = "Authentication required"
 
 
+class AuthInvalidCredentialsApiError(ApiError):
+    status_code = 401
+    code = "AUTH_INVALID_CREDENTIALS"
+    message = "Invalid credentials"
+
+
+class WorkspaceAccessForbiddenApiError(ApiError):
+    status_code = 403
+    code = "WORKSPACE_ACCESS_FORBIDDEN"
+    message = "Workspace access forbidden"
+
+
 class AdminRequiredApiError(ApiError):
     status_code = 403
     code = "ADMIN_REQUIRED"

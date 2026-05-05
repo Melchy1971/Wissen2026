@@ -10,6 +10,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+
 from app.core.errors import ApiError
 from app.models.documents import BackgroundJob
 from app.schemas.jobs import ImportJobResult, JobResponse, SearchIndexRebuildJobResult
@@ -181,7 +182,7 @@ def process_import_job(job_id: str, bind: Engine | None = None) -> None:
             source_bytes = Path(temp_file_path).read_bytes()
             result = ImportExecutor().execute(
                 workspace_id=job.workspace_id,
-                user_id=job.requested_by_user_id or settings.default_user_id,
+                user_id=job.requested_by_user_id or "",
                 filename=filename,
                 mime_type=mime_type,
                 source_bytes=source_bytes,

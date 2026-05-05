@@ -12,9 +12,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from app.api import documents as documents_api
+from app.db import session as db_session_module
 from app.main import app
-from app.models.documents import Base, Chunk, Document, DocumentVersion
+from app.models.documents import AuthSession, Base, Chunk, Document, DocumentVersion, User, Workspace, WorkspaceMembership
 from app.repositories.documents import DocumentRepository
+from app.services.auth import hash_password, hash_token
 from app.services.documents.lifecycle_service import DocumentLifecycleService
 from app.services.documents.read_service import DocumentReadService
 from app.services.jobs.background_jobs import BackgroundJobService
@@ -29,6 +31,7 @@ VERSION_ID = "00000000-0000-0000-0000-000000000201"
 OLDER_VERSION_ID = "00000000-0000-0000-0000-000000000202"
 CHUNK_ID = "00000000-0000-0000-0000-000000000301"
 SECOND_CHUNK_ID = "00000000-0000-0000-0000-000000000302"
+SESSION_TOKEN = "test-session-token"
 
 
 @pytest.fixture(autouse=True)
@@ -49,9 +52,12 @@ def test_engine() -> Iterator[Engine]:
         poolclass=StaticPool,
     )
     Base.metadata.create_all(engine)
+    original_engine = db_session_module._engine
+    db_session_module._engine = engine
     try:
         yield engine
     finally:
+        db_session_module._engine = original_engine
         engine.dispose()
 
 
@@ -82,7 +88,60 @@ def chunk_id() -> str:
 
 
 @pytest.fixture
-def document_fixture(db_session: Session) -> dict[str, str]:
+def auth_fixture(db_session: Session) -> dict[str, str]:
+    created = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
+
+    db_session.add(
+        Workspace(
+            id=DEFAULT_WORKSPACE_ID,
+            name="Default Workspace",
+            is_default=True,
+            created_at=created,
+        )
+    )
+    db_session.add(
+        User(
+            id=DEFAULT_USER_ID,
+            display_name="Default User",
+            login="default-user",
+            password_hash=hash_password("secret-password", salt="testsalt"),
+            is_active=True,
+            is_default=True,
+            created_at=created,
+        )
+    )
+    db_session.add(
+        WorkspaceMembership(
+            id="membership-1",
+            workspace_id=DEFAULT_WORKSPACE_ID,
+            user_id=DEFAULT_USER_ID,
+            role="owner",
+            created_at=created,
+            updated_at=created,
+        )
+    )
+    db_session.add(
+        AuthSession(
+            id="session-1",
+            user_id=DEFAULT_USER_ID,
+            token_hash=hash_token(SESSION_TOKEN),
+            expires_at=datetime(2036, 5, 2, 10, 0, tzinfo=UTC),
+            created_at=created,
+            last_seen_at=created,
+            revoked_at=None,
+        )
+    )
+    db_session.commit()
+
+    return {
+        "workspace_id": DEFAULT_WORKSPACE_ID,
+        "user_id": DEFAULT_USER_ID,
+        "session_token": SESSION_TOKEN,
+    }
+
+
+@pytest.fixture
+def document_fixture(db_session: Session, auth_fixture: dict[str, str]) -> dict[str, str]:
     created = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
     updated = datetime(2026, 5, 1, 11, 0, tzinfo=UTC)
     older_created = datetime(2026, 4, 30, 10, 0, tzinfo=UTC)
@@ -204,7 +263,7 @@ def document_fixture(db_session: Session) -> dict[str, str]:
 
 
 @pytest.fixture
-def client(db_session: Session) -> Iterator[TestClient]:
+def client(db_session: Session, auth_fixture: dict[str, str]) -> Iterator[TestClient]:
     def override_document_read_service() -> Iterator[DocumentReadService]:
         yield DocumentReadService(DocumentRepository(db_session))
 
@@ -218,6 +277,12 @@ def client(db_session: Session) -> Iterator[TestClient]:
     app.dependency_overrides[documents_api.get_document_lifecycle_service] = override_document_lifecycle_service
     app.dependency_overrides[documents_api.get_background_job_service] = override_background_job_service
     try:
-        yield TestClient(app)
+        yield TestClient(
+            app,
+            headers={
+                "Authorization": f"Bearer {SESSION_TOKEN}",
+                "X-Workspace-Id": DEFAULT_WORKSPACE_ID,
+            },
+        )
     finally:
         app.dependency_overrides.clear()

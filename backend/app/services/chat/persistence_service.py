@@ -7,7 +7,6 @@ from uuid import uuid4
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.documents import ChatCitation, ChatMessage, ChatSession
 
 
@@ -46,7 +45,7 @@ class ChatPersistenceService:
     ) -> ChatSession:
         normalized_workspace_id = workspace_id.strip()
         normalized_title = title.strip()
-        normalized_owner_user_id = (owner_user_id or settings.default_user_id).strip()
+        normalized_owner_user_id = (owner_user_id or "").strip()
 
         if not normalized_workspace_id:
             raise ChatPersistenceError("workspace_id must not be blank")

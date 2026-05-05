@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 
+import { getApiRequestContext } from '../api/client.js';
 import { getDocuments, importDocument, searchChunks } from '../api/documents.js';
 import { getJob } from '../api/jobs.js';
 import { DocumentTable } from '../components/documents/DocumentTable.jsx';
@@ -11,8 +11,8 @@ import { LoadingState } from '../components/status/LoadingState.jsx';
 import { mapDocumentListItem, mapError, mapJobStatus, mapSearchResult } from '../view-models/mappers.js';
 
 export function DocumentsPage() {
-  const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace_id') || '00000000-0000-0000-0000-000000000001';
+  const requestContext = getApiRequestContext();
+  const workspaceId = requestContext.workspaceId || 'nicht konfiguriert';
   const [state, setState] = useState({ status: 'loading', items: [], error: null });
   const [searchState, setSearchState] = useState({ status: 'idle', items: [], error: null, query: '' });
   const [uploadState, setUploadState] = useState({ status: 'idle', fileName: '', job: null, result: null, error: null });
@@ -23,7 +23,7 @@ export function DocumentsPage() {
   async function loadDocuments({ cancelled = false } = {}) {
     setState({ status: 'loading', items: [], error: null });
     try {
-      const response = await getDocuments({ workspaceId, limit: 20, offset: 0 });
+      const response = await getDocuments({ limit: 20, offset: 0 });
       if (cancelled) return;
       const items = response.map(mapDocumentListItem);
       setState({ status: 'success', items, error: null });
@@ -192,16 +192,36 @@ export function DocumentsPage() {
           <div className="meta-grid">
             <div>
               <dt>Import</dt>
-              <dd>{uploadState.fileName} erfolgreich verarbeitet</dd>
+              <dd>
+                {uploadState.result?.import_status === 'duplicate'
+                  ? `${uploadState.fileName} bereits vorhanden`
+                  : `${uploadState.fileName} erfolgreich verarbeitet`}
+              </dd>
             </div>
             <div>
               <dt>Dokument</dt>
               <dd>{uploadState.result?.document_id || 'unbekannt'}</dd>
             </div>
             <div>
+              <dt>Import-Status</dt>
+              <dd>{uploadState.result?.import_status || 'unbekannt'}</dd>
+            </div>
+            <div>
               <dt>Chunks</dt>
               <dd>{uploadState.result?.chunk_count ?? 0}</dd>
             </div>
+            {uploadState.result?.duplicate_of_document_id ? (
+              <div>
+                <dt>Vorhandenes Dokument</dt>
+                <dd>{uploadState.result.duplicate_of_document_id}</dd>
+              </div>
+            ) : null}
+            {uploadState.result?.parser_type ? (
+              <div>
+                <dt>Parser</dt>
+                <dd>{uploadState.result.parser_type}</dd>
+              </div>
+            ) : null}
           </div>
         ) : null}
 

@@ -4,6 +4,7 @@ from typing import Annotated, Iterator
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile, status
 
+from app.api.dependencies.auth import RequestAuthContext, require_workspace_member
 from app.core.config import settings
 from app.core.database import DatabaseConfigurationError
 from app.core.errors import (
@@ -51,10 +52,12 @@ def get_document_read_service() -> Iterator[DocumentReadService]:
         raise ApiError(message=str(exc)) from exc
 
 
-def get_upload_request_context() -> UploadRequestContext:
+def get_upload_request_context(
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
+) -> UploadRequestContext:
     return UploadRequestContext(
-        workspace_id=settings.default_workspace_id,
-        user_id=settings.default_user_id,
+        workspace_id=auth_context.workspace_id,
+        user_id=auth_context.user_id,
     )
 
 
@@ -76,7 +79,7 @@ def get_background_job_service() -> Iterator[BackgroundJobService]:
 
 @router.get("", response_model=list[DocumentListItem])
 def list_documents(
-    workspace_id: Annotated[str, Query(min_length=1)],
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -87,7 +90,7 @@ def list_documents(
         if lifecycle_status not in {None, "active", "archived", "deleted"}:
             raise InvalidLifecycleStatusApiError(details={"lifecycle_status": lifecycle_status})
         return service.get_documents(
-            workspace_id=workspace_id,
+            workspace_id=auth_context.workspace_id,
             limit=limit,
             offset=offset,
             lifecycle_status=lifecycle_status,
@@ -100,10 +103,11 @@ def list_documents(
 @router.get("/{document_id}", response_model=DocumentDetail)
 def get_document(
     document_id: str,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
 ) -> DocumentDetail:
     try:
-        return service.get_document_detail(document_id)
+        return service.get_document_detail(document_id, workspace_id=auth_context.workspace_id)
     except DocumentNotFoundError as exc:
         raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
     except DocumentStateConflictError as exc:
@@ -115,10 +119,11 @@ def get_document(
 @router.get("/{document_id}/versions", response_model=list[DocumentVersionSummary])
 def list_document_versions(
     document_id: str,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
 ) -> list[DocumentVersionSummary]:
     try:
-        return service.get_versions(document_id)
+        return service.get_versions(document_id, workspace_id=auth_context.workspace_id)
     except DocumentNotFoundError as exc:
         raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
     except DatabaseConfigurationError as exc:
@@ -128,11 +133,12 @@ def list_document_versions(
 @router.get("/{document_id}/chunks", response_model=list[DocumentChunkPreview])
 def list_document_chunks(
     document_id: str,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentReadService, Depends(get_document_read_service)],
     limit: Annotated[int | None, Query(ge=1, le=500)] = None,
 ) -> list[DocumentChunkPreview]:
     try:
-        return service.get_chunks(document_id, limit=limit)
+        return service.get_chunks(document_id, workspace_id=auth_context.workspace_id, limit=limit)
     except DocumentNotFoundError as exc:
         raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
     except DatabaseConfigurationError as exc:
@@ -142,6 +148,7 @@ def list_document_chunks(
 @router.patch("/{document_id}/archive", response_model=DocumentLifecycleResponse)
 def archive_document(
     document_id: str,
+    _auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentLifecycleService, Depends(get_document_lifecycle_service)],
 ) -> DocumentLifecycleResponse:
     try:
@@ -161,6 +168,7 @@ def archive_document(
 @router.patch("/{document_id}/restore", response_model=DocumentLifecycleResponse)
 def restore_document(
     document_id: str,
+    _auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentLifecycleService, Depends(get_document_lifecycle_service)],
 ) -> DocumentLifecycleResponse:
     try:
@@ -180,6 +188,7 @@ def restore_document(
 @router.delete("/{document_id}", response_model=DocumentLifecycleResponse)
 def delete_document(
     document_id: str,
+    _auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[DocumentLifecycleService, Depends(get_document_lifecycle_service)],
 ) -> DocumentLifecycleResponse:
     try:
@@ -238,9 +247,13 @@ async def import_document(
 @router.get("/import-jobs/{job_id}", response_model=JobResponse)
 def get_import_job(
     job_id: str,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     job_service: Annotated[BackgroundJobService, Depends(get_background_job_service)],
 ) -> JobResponse:
     try:
-        return job_service.to_response(job_service.get_job(job_id))
+        job = job_service.get_job(job_id)
+        if job.workspace_id != auth_context.workspace_id:
+            raise BackgroundJobNotFoundError(job_id)
+        return job_service.to_response(job)
     except BackgroundJobNotFoundError as exc:
         raise BackgroundJobNotFoundApiError(details={"job_id": job_id}) from exc

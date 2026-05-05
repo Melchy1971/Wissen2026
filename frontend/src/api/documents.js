@@ -2,7 +2,6 @@ import { requestJson } from './client.js';
 
 export function getDocuments({ workspaceId, limit = 20, offset = 0 }) {
   const query = new URLSearchParams({
-    workspace_id: workspaceId,
     limit: String(limit),
     offset: String(offset),
   });
@@ -30,7 +29,6 @@ export function getDocumentChunks(id, { limit } = {}) {
 
 export function searchChunks({ workspaceId, query, limit = 20, offset = 0 }) {
   const search = new URLSearchParams({
-    workspace_id: workspaceId,
     q: query,
     limit: String(limit),
     offset: String(offset),

@@ -76,6 +76,7 @@ function mapErrorTitle(code) {
     CHAT_SESSION_NOT_FOUND: 'Chat-Sitzung nicht gefunden',
     DOCUMENT_STATE_CONFLICT: 'Dokumentzustand inkonsistent',
     WORKSPACE_REQUIRED: 'Workspace fehlt',
+    WORKSPACE_ACCESS_FORBIDDEN: 'Workspace-Zugriff verweigert',
     INVALID_QUERY: 'Ungueltige Suche',
     INVALID_PAGINATION: 'Ungueltige Pagination',
     QUERY_REQUIRED: 'Frage fehlt',
@@ -85,6 +86,8 @@ function mapErrorTitle(code) {
     RETRIEVAL_FAILED: 'Retrieval fehlgeschlagen',
     OCR_REQUIRED: 'OCR erforderlich',
     PARSER_FAILED: 'Parser fehlgeschlagen',
+    FILE_TOO_LARGE: 'Datei zu gross',
+    UNSUPPORTED_FILE_TYPE: 'Dateityp nicht unterstuetzt',
   };
 
   return titles[code] || 'Fehler';

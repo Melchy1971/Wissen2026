@@ -39,7 +39,7 @@ def map_validation_error(exc: RequestValidationError) -> ApiError:
     errors = exc.errors()
     for error in errors:
         location = tuple(error.get("loc", ()))
-        if location in {("query", "workspace_id"), ("body", "workspace_id")}:
+        if location in {("query", "workspace_id"), ("body", "workspace_id"), ("header", "x-workspace-id")}:
             return WorkspaceRequiredApiError(details={"errors": errors})
         if location in {
             ("body", "content"),

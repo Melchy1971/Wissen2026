@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { setApiRequestContext } from '../../api/client.js';
 import { DocumentsPage } from '../../pages/DocumentsPage.jsx';
 
 function renderPage(initialEntry = '/documents?workspace_id=workspace-1') {
@@ -16,11 +17,17 @@ function renderPage(initialEntry = '/documents?workspace_id=workspace-1') {
 
 describe('DocumentsPage', () => {
   afterEach(() => {
+    setApiRequestContext({ authToken: '', workspaceId: '' });
     vi.restoreAllMocks();
     cleanup();
   });
 
+  function primeRequestContext() {
+    setApiRequestContext({ authToken: 'test-token', workspaceId: 'workspace-1' });
+  }
+
   it('renders documents from the API', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       headers: new Headers({ 'content-type': 'application/json' }),
@@ -44,9 +51,19 @@ describe('DocumentsPage', () => {
     expect(screen.getByText(/Dokumente werden geladen/i)).toBeInTheDocument();
     expect(await screen.findByText('Vertragsentwurf')).toBeInTheDocument();
     expect(screen.getByText('Lesbar')).toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/documents?limit=20&offset=0'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-token',
+          'X-Workspace-Id': 'workspace-1',
+        }),
+      }),
+    );
   });
 
   it('renders empty state for an empty list', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       headers: new Headers({ 'content-type': 'application/json' }),
@@ -59,6 +76,7 @@ describe('DocumentsPage', () => {
   });
 
   it('renders visible error code on API errors', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: false,
       status: 503,
@@ -76,6 +94,7 @@ describe('DocumentsPage', () => {
   });
 
   it('renders search results with preview and source anchor', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
@@ -134,9 +153,20 @@ describe('DocumentsPage', () => {
       'href',
       '/documents/doc-1?workspace_id=workspace-1',
     );
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/api/v1/search/chunks?q=vertragsentwurf&limit=10&offset=0'),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer test-token',
+          'X-Workspace-Id': 'workspace-1',
+        }),
+      }),
+    );
   });
 
   it('renders empty search state when no results are found', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
@@ -162,6 +192,7 @@ describe('DocumentsPage', () => {
   });
 
   it('renders search error state when search api fails', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
@@ -190,6 +221,7 @@ describe('DocumentsPage', () => {
   });
 
   it('uploads a document through the queued import flow and refreshes the list', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
@@ -274,11 +306,13 @@ describe('DocumentsPage', () => {
 
     expect(await screen.findByText(/notes.txt erfolgreich verarbeitet/i)).toBeInTheDocument();
     expect(screen.getByText('doc-2')).toBeInTheDocument();
+    expect(screen.getByText('chunked')).toBeInTheDocument();
     expect(await screen.findByText('notes')).toBeInTheDocument();
     expect(globalThis.fetch).toHaveBeenCalledTimes(4);
   });
 
   it('renders normalized queued upload job status labels', async () => {
+    primeRequestContext();
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce({
         ok: true,
@@ -317,5 +351,237 @@ describe('DocumentsPage', () => {
 
     expect(await screen.findByText('In Warteschlange')).toBeInTheDocument();
     expect(screen.getByText('Import wartet auf Ausfuehrung.')).toBeInTheDocument();
+  });
+
+  it('shows duplicate imports as existing documents instead of generic success', async () => {
+    primeRequestContext();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-dup',
+          job_type: 'document_import',
+          status: 'queued',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: 'user-1',
+          filename: 'notes.txt',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: null,
+          finished_at: null,
+          progress_current: 0,
+          progress_total: 1,
+          progress_message: 'Import ist in Warteschlange',
+          error_code: null,
+          error_message: null,
+          result: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-dup',
+          job_type: 'document_import',
+          status: 'completed',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: 'user-1',
+          filename: 'notes.txt',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: '2026-05-05T00:00:01Z',
+          finished_at: '2026-05-05T00:00:02Z',
+          progress_current: 1,
+          progress_total: 1,
+          progress_message: 'Import abgeschlossen',
+          error_code: null,
+          error_message: null,
+          result: {
+            document_id: 'doc-2',
+            version_id: 'ver-2',
+            import_status: 'duplicate',
+            duplicate_of_document_id: 'doc-2',
+            chunk_count: 4,
+            parser_type: 'txt-parser',
+            warnings: [],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Keine Dokumente vorhanden')).toBeInTheDocument();
+
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByLabelText('Datei'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dokument importieren' }));
+
+    expect(await screen.findByText(/notes.txt bereits vorhanden/i)).toBeInTheDocument();
+    expect(screen.getByText('duplicate')).toBeInTheDocument();
+    expect(screen.getByText('txt-parser')).toBeInTheDocument();
+    expect(screen.getAllByText('doc-2')).toHaveLength(2);
+  });
+
+  it('maps ocr-required upload failures to a specific error title', async () => {
+    primeRequestContext();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-ocr',
+          job_type: 'document_import',
+          status: 'queued',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: 'user-1',
+          filename: 'scan.pdf',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: null,
+          finished_at: null,
+          progress_current: 0,
+          progress_total: 1,
+          progress_message: 'Import ist in Warteschlange',
+          error_code: null,
+          error_message: null,
+          result: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-ocr',
+          job_type: 'document_import',
+          status: 'failed',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: 'user-1',
+          filename: 'scan.pdf',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: '2026-05-05T00:00:01Z',
+          finished_at: '2026-05-05T00:00:02Z',
+          progress_current: 1,
+          progress_total: 1,
+          progress_message: 'Import fehlgeschlagen',
+          error_code: 'OCR_REQUIRED',
+          error_message: 'OCR required but no OCR engine is configured',
+          result: null,
+        }),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Keine Dokumente vorhanden')).toBeInTheDocument();
+
+    const file = new File(['fake'], 'scan.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Datei'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dokument importieren' }));
+
+    expect(await screen.findByText('OCR erforderlich')).toBeInTheDocument();
+    expect(screen.getByText(/Fehlercode: OCR_REQUIRED/i)).toBeInTheDocument();
+  });
+
+  it('maps parser failures to a specific error title', async () => {
+    primeRequestContext();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-parser',
+          job_type: 'document_import',
+          status: 'queued',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: 'user-1',
+          filename: 'broken.pdf',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: null,
+          finished_at: null,
+          progress_current: 0,
+          progress_total: 1,
+          progress_message: 'Import ist in Warteschlange',
+          error_code: null,
+          error_message: null,
+          result: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-parser',
+          job_type: 'document_import',
+          status: 'failed',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: 'user-1',
+          filename: 'broken.pdf',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: '2026-05-05T00:00:01Z',
+          finished_at: '2026-05-05T00:00:02Z',
+          progress_current: 1,
+          progress_total: 1,
+          progress_message: 'Import fehlgeschlagen',
+          error_code: 'PARSER_FAILED',
+          error_message: 'PDF file could not be opened',
+          result: null,
+        }),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Keine Dokumente vorhanden')).toBeInTheDocument();
+
+    const file = new File(['fake'], 'broken.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Datei'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dokument importieren' }));
+
+    expect(await screen.findByText('Parser fehlgeschlagen')).toBeInTheDocument();
+    expect(screen.getByText(/Fehlercode: PARSER_FAILED/i)).toBeInTheDocument();
+  });
+
+  it('maps upload validation errors from the backend with specific titles', async () => {
+    primeRequestContext();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 413,
+        statusText: 'Request Entity Too Large',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({ error: { code: 'FILE_TOO_LARGE', message: 'Uploaded file exceeds the configured maximum size', details: {} } }),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Keine Dokumente vorhanden')).toBeInTheDocument();
+
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByLabelText('Datei'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dokument importieren' }));
+
+    expect(await screen.findByText('Datei zu gross')).toBeInTheDocument();
+    expect(screen.getByText(/Fehlercode: FILE_TOO_LARGE/i)).toBeInTheDocument();
   });
 });

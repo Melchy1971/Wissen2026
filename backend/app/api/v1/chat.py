@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 
+from app.api.dependencies.auth import RequestAuthContext, require_workspace_member
 from app.core.database import DatabaseConfigurationError
 from app.core.errors import (
     ChatPersistenceFailedApiError,
@@ -68,12 +69,14 @@ def get_rag_chat_service() -> Iterator[RagChatService]:
 @router.post("/sessions", response_model=ChatSessionSummary, status_code=status.HTTP_201_CREATED)
 def create_chat_session(
     request: ChatSessionCreateRequest,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[ChatPersistenceService, Depends(get_chat_service)],
 ) -> ChatSessionSummary:
     try:
         chat_session = service.create_session(
-            workspace_id=request.workspace_id,
+            workspace_id=auth_context.workspace_id,
             title=request.title or "Untitled chat",
+            owner_user_id=auth_context.user_id,
         )
     except ChatPersistenceError as exc:
         raise ChatPersistenceFailedApiError(message=str(exc)) from exc
@@ -82,13 +85,13 @@ def create_chat_session(
 
 @router.get("/sessions", response_model=list[ChatSessionSummary])
 def list_chat_sessions(
-    workspace_id: Annotated[str, Query(min_length=1)],
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[ChatPersistenceService, Depends(get_chat_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[ChatSessionSummary]:
     try:
-        sessions = service.list_sessions(workspace_id=workspace_id, limit=limit, offset=offset)
+        sessions = service.list_sessions(workspace_id=auth_context.workspace_id, limit=limit, offset=offset)
     except ChatPersistenceError as exc:
         raise ChatPersistenceFailedApiError(message=str(exc)) from exc
     return [to_session_summary(chat_session) for chat_session in sessions]
@@ -97,10 +100,13 @@ def list_chat_sessions(
 @router.get("/sessions/{session_id}", response_model=ChatSessionDetail)
 def get_chat_session_detail(
     session_id: str,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[ChatPersistenceService, Depends(get_chat_service)],
 ) -> ChatSessionDetail:
     try:
         chat_session = service.get_session(session_id=session_id)
+        if chat_session.workspace_id != auth_context.workspace_id:
+            raise ChatSessionNotFoundError(session_id)
         messages = service.list_messages(session_id=session_id)
         message_responses = [
             to_message_response(message, service.list_citations(message_id=message.id)) for message in messages
@@ -120,11 +126,12 @@ def get_chat_session_detail(
 def create_chat_message(
     session_id: str,
     request: ChatMessageCreateRequest,
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_member)],
     service: Annotated[RagChatService, Depends(get_rag_chat_service)],
 ) -> ChatMessageResponse:
     return service.answer_question(
         session_id=session_id,
-        workspace_id=request.workspace_id,
+        workspace_id=auth_context.workspace_id,
         question=request.question,
         retrieval_limit=request.retrieval_limit,
     )
