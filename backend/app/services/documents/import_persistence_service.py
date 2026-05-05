@@ -144,8 +144,23 @@ class DocumentImportPersistenceService:
                 (version_id, "parsed", document_id),
             )
 
-            for chunk in version_chunks:
-                cursor.execute(
+            chunk_rows = [
+                (
+                    str(uuid4()),
+                    document_id,
+                    version_id,
+                    chunk.chunk_index,
+                    Jsonb(chunk.heading_path),
+                    chunk.anchor,
+                    chunk.content,
+                    chunk.content_hash,
+                    chunk.token_estimate,
+                    Jsonb(chunk.metadata),
+                )
+                for chunk in version_chunks
+            ]
+            if chunk_rows:
+                cursor.executemany(
                     """
                     insert into document_chunks (
                         id,
@@ -161,18 +176,7 @@ class DocumentImportPersistenceService:
                     )
                     values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (
-                        str(uuid4()),
-                        document_id,
-                        version_id,
-                        chunk.chunk_index,
-                        Jsonb(chunk.heading_path),
-                        chunk.anchor,
-                        chunk.content,
-                        chunk.content_hash,
-                        chunk.token_estimate,
-                        Jsonb(chunk.metadata),
-                    ),
+                    chunk_rows,
                 )
 
             cursor.execute(

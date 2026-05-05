@@ -1,10 +1,28 @@
-# API fuer M3a GUI, M3b Retrieval-UI und M3c Chat/RAG
+# API fuer M3a GUI, M3b Retrieval-UI, M3c Chat/RAG und M4-Produktisierung
 
 Stand: 2026-05-05
 
 ## Zweck
 
 Dieses Dokument beschreibt die API-Abhaengigkeit der aktuellen GUI auf hoher Ebene und finalisiert den stabilen Vertrag fuer M3b Search sowie M3c Chat/RAG. Verbindlicher Detailvertrag fuer die Dokument-Read-Pfade bleibt `docs/api/v1-document-api-contract.md`. Der Retrieval-Vertrag fuer M3b ist zusaetzlich in `docs/retrieval.md` beschrieben.
+
+## M4a Konsistenzstand
+
+Der dokumentierte Zielzustand fuer M4a waere ein serverseitig aufgeloester Auth- und Workspace-Kontext. Im vorliegenden Code ist dieser Zustand noch nicht erreicht.
+
+Nachweisbar implementiert:
+
+- `AUTH_REQUIRED` und `ADMIN_REQUIRED` fuer den Admin-Rebuild ueber `x-admin-token`
+- `WORKSPACE_REQUIRED` fuer mehrere fachliche Endpunkte mit explizitem Workspace-Parameter
+- serverseitiger Default-Kontext fuer Uploads statt clientseitig frei uebergebener `workspace_id`
+
+Nicht nachweisbar implementiert:
+
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
+- Cookie-Session oder JWT-basierte Benutzeridentitaet
+- Membership-Validierung gegen einen Workspace
 
 ## Aktuell implementierte Endpunkte
 
@@ -14,6 +32,10 @@ M3a Dokument-GUI:
 - `GET /documents/{document_id}`
 - `GET /documents/{document_id}/versions`
 - `GET /documents/{document_id}/chunks`
+- `POST /documents/import`
+- `PATCH /documents/{document_id}/archive`
+- `PATCH /documents/{document_id}/restore`
+- `DELETE /documents/{document_id}`
 
 M3b Retrieval:
 
@@ -25,6 +47,15 @@ M3c Chat:
 - `GET /api/v1/chat/sessions`
 - `GET /api/v1/chat/sessions/{session_id}`
 - `POST /api/v1/chat/sessions/{session_id}/messages`
+
+M4d Admin/Diagnostics:
+
+- `POST /api/v1/admin/search-index/rebuild`
+- `GET /api/v1/jobs/{job_id}`
+
+M4e Backup/Restore:
+
+- CLI-first, optionale Admin-API spaeter
 
 ## M3b Search Contract
 
@@ -153,6 +184,347 @@ Alle Fehler folgen dem Standardformat:
 | `503` | `SERVICE_UNAVAILABLE` | Search-Backend ist nicht verfuegbar oder nicht PostgreSQL |
 | `500` | `INTERNAL_ERROR` | unerwarteter interner Fehler oder fehlende DB-Konfiguration ausserhalb des Search-Backend-Checks |
 
+## M4a Auth- und Workspace-bezogene Fehlercodes
+
+| HTTP Status | Code | Aktueller Einsatz |
+|---:|---|---|
+| `401` | `AUTH_REQUIRED` | Admin-Rebuild ohne `x-admin-token` |
+| `403` | `ADMIN_REQUIRED` | Admin-Rebuild mit falschem `x-admin-token` |
+| `422` | `WORKSPACE_REQUIRED` | Dokument-, Search- oder Chat-Requests ohne `workspace_id` |
+
+Bekannte Einschraenkung:
+
+- Ein fachlicher Fehlercode wie `WORKSPACE_ACCESS_FORBIDDEN` ist im aktuellen Code nicht nachweisbar, weil Membership-Pruefung noch nicht implementiert ist.
+
+## Upload Contract
+
+### `POST /documents/import`
+
+Importiert genau eine Datei ueber den bestehenden Dokument-Importpfad.
+
+Upload-Flow im aktuellen Stand:
+
+1. `POST /documents/import` legt einen `document_import`-Job an.
+2. Der Endpoint antwortet sofort mit `202 Accepted` und Jobmetadaten.
+3. Das Frontend pollt `GET /api/v1/jobs/{job_id}`.
+4. Der Job wechselt ueber `queued` und `running` nach `completed` oder `failed`.
+5. Erst der Jobstatus transportiert das eigentliche Importergebnis oder den fachlichen Fehler.
+
+Request:
+
+- `multipart/form-data`
+- Feld: `file`
+
+Response `202`:
+
+```json
+{
+  "id": "job-id",
+  "job_type": "document_import",
+  "status": "queued",
+  "workspace_id": "workspace-id",
+  "requested_by_user_id": "user-id",
+  "filename": "file.txt",
+  "created_at": "2026-05-05T12:00:00Z",
+  "started_at": null,
+  "finished_at": null,
+  "progress_current": 0,
+  "progress_total": 1,
+  "progress_message": "Import ist in Warteschlange",
+  "error_code": null,
+  "error_message": null,
+  "result": null
+}
+```
+
+Statusabfrage:
+
+- `GET /api/v1/jobs/{job_id}`
+
+Fehlgeschlagener Job `200`:
+
+```json
+{
+  "id": "job-id",
+  "job_type": "document_import",
+  "status": "failed",
+  "workspace_id": "workspace-id",
+  "requested_by_user_id": "user-id",
+  "filename": "scan.pdf",
+  "created_at": "2026-05-05T12:00:00Z",
+  "started_at": "2026-05-05T12:00:01Z",
+  "finished_at": "2026-05-05T12:00:02Z",
+  "progress_current": 1,
+  "progress_total": 1,
+  "progress_message": "Import fehlgeschlagen",
+  "error_code": "OCR_REQUIRED",
+  "error_message": "OCR is required but no OCR engine is configured",
+  "result": null
+}
+```
+
+Abgeschlossener Job `200`:
+
+```json
+{
+  "id": "job-id",
+  "job_type": "document_import",
+  "status": "completed",
+  "workspace_id": "workspace-id",
+  "requested_by_user_id": "user-id",
+  "filename": "file.txt",
+  "created_at": "2026-05-05T12:00:00Z",
+  "started_at": "2026-05-05T12:00:01Z",
+  "finished_at": "2026-05-05T12:00:02Z",
+  "progress_current": 1,
+  "progress_total": 1,
+  "progress_message": "Import abgeschlossen",
+  "error_code": null,
+  "error_message": null,
+  "result": {
+    "document_id": "document-id",
+    "version_id": "version-id",
+    "import_status": "chunked",
+    "duplicate_of_document_id": null,
+    "chunk_count": 4,
+    "parser_type": "txt-parser",
+    "warnings": []
+  }
+}
+```
+
+Response-Felder:
+
+| Feld | Typ | Nullable | Hinweis |
+|---|---|---:|---|
+| `document_id` | string | nein | Ziel- oder Bestandsdokument |
+| `version_id` | string | ja | bei Duplicate kann die bestehende Version geliefert werden |
+| `import_status` | string | nein | `pending`, `parsing`, `parsed`, `chunked`, `failed`, `duplicate` |
+| `duplicate_of_document_id` | string | ja | gesetzt, wenn bestehendes Dokument wiederverwendet wurde |
+| `chunk_count` | integer | nein | Zahl der gespeicherten oder wiedergefundenen Chunks |
+| `parser_type` | string | nein | technischer Parser-Identifikator wie `txt-parser` |
+| `warnings` | array | nein | strukturierte nicht-fatale Importhinweise |
+
+## Importstatus und Duplicate-Verhalten
+
+Jobstatus:
+
+- `queued`: Upload angenommen, Verarbeitung noch nicht gestartet
+- `running`: Importpipeline laeuft
+- `completed`: Ergebnis in `result`
+- `failed`: Fehler in `error_code` und `error_message`
+
+Fachlicher Importstatus in `result.import_status`:
+
+- `chunked`: neuer Import erfolgreich persistiert und gechunkt
+- `duplicate`: bestehendes Dokument wurde wiederverwendet
+
+Duplicate-Vertrag im aktuellen Stand:
+
+- `result.import_status = duplicate`
+- `result.duplicate_of_document_id = <bestehende dokument-id>`
+- `result.document_id` zeigt weiterhin auf das vorhandene Zieldokument
+- der Job selbst bleibt `completed`, weil Duplicate als fachlich erfolgreicher Abschluss gilt
+
+OCR-required-Vertrag im aktuellen Stand:
+
+- OCR-Bedarf liefert keinen `completed`-Duplicate- oder Erfolgsfall
+- stattdessen liefert der Job `status = failed` und `error_code = OCR_REQUIRED`
+- `result` bleibt `null`
+
+Warning-Eintrag:
+
+```json
+{
+  "code": "NORMALIZATION_FAILED",
+  "message": "...",
+  "details": {
+    "stage": "normalize",
+    "recoverable": true
+  }
+}
+```
+
+Fehlerformat:
+
+```json
+{
+  "error": {
+    "code": "PARSER_FAILED",
+    "message": "Document parser failed",
+    "details": {}
+  }
+}
+```
+
+Relevante Fehlercodes:
+
+| Status | Code | Bedeutung |
+|---:|---|---|
+| `415` | `UNSUPPORTED_FILE_TYPE` | Dateityp nicht unterstuetzt |
+| `413` | `FILE_TOO_LARGE` | Datei ueberschreitet die konfigurierte Maximalgroesse |
+| `422` | `PARSER_FAILED` | Parser oder Normalisierung fehlgeschlagen |
+| `422` | `OCR_REQUIRED` | OCR waere erforderlich, ist aber nicht verfuegbar |
+| `500` | `IMPORT_FAILED` | Importpfad oder Persistenz ist unerwartet fehlgeschlagen |
+
+Vertragsregeln:
+
+- Es duerfen keine rohen Exceptions an die API durchgereicht werden.
+- Die maximale Dateigroesse ist konfigurierbar.
+- Der Workspace fuer den Import wird serverseitig aus dem Request-Kontext abgeleitet; aktuell basiert dieser Kontext aber noch auf `settings.default_workspace_id` statt auf einer echten Benutzersession.
+
+## Upload-bezogene Fehlercodes
+
+| HTTP Status oder Jobstatus | Code | Aktueller Einsatz |
+|---|---|---|
+| `413` | `FILE_TOO_LARGE` | Datei groesser als `max_upload_file_size_bytes` |
+| `415` | `UNSUPPORTED_FILE_TYPE` | Dateiendung oder MIME-Typ nicht unterstuetzt |
+| `200` mit Job `failed` | `PARSER_FAILED` | Parser, Normalisierung oder Chunking fehlgeschlagen |
+| `200` mit Job `failed` | `OCR_REQUIRED` | PDF enthaelt zu wenig extrahierbaren Text fuer OCR-losen Import |
+| `404` | `JOB_NOT_FOUND` | Statusabfrage fuer unbekannte Job-ID |
+| n/a | `NETWORK_ERROR` | Frontend erreicht API nicht |
+
+Bekannte Einschraenkungen:
+
+- Duplicate und OCR werden vertraglich sauber transportiert, aber nicht ueber spezialisierte Backend-Endpoints oder UI-Flows getrennt.
+- Es gibt keinen Byte-Fortschritt; sichtbar ist nur der Jobzustand.
+
+## M4c Document Lifecycle Contract
+
+Lifecycle-Status:
+
+- `active`
+- `archived`
+- `deleted`
+
+Lifecycle-Regeln:
+
+- `active` ist in Liste, Search, Retrieval und Chat verwendbar.
+- `archived` ist nur in der Dokumentliste mit Filter sichtbar und wird nicht in Search oder Retrieval einbezogen.
+- `deleted` ist soft deleted und weder sichtbar noch direkt abrufbar oder suchbar.
+- Bestehende Chat-Citations bleiben historisch sichtbar.
+
+Auswirkungen auf Liste, Suche und Chat:
+
+- Dokumentliste zeigt ohne Filter nur `active`.
+- Dokumentdetail, Versions- und Chunk-Read behandeln `deleted` wie `DOCUMENT_NOT_FOUND`.
+- Retrieval/Search lassen nur `Document.lifecycle_status == active` zu.
+- neue Chat-Antworten koennen daher nur aktive Dokumente zitieren.
+- bestehende Chat-Nachrichten behalten ihre bereits gespeicherten Citations, auch wenn das referenzierte Dokument spaeter geloescht wurde.
+
+### Lifecycle-Felder im Dokumentvertrag
+
+`GET /documents` und `GET /documents/{document_id}` liefern zusaetzlich:
+
+| Feld | Typ | Nullable | Hinweis |
+|---|---|---:|---|
+| `lifecycle_status` | string | nein | `active`, `archived`, `deleted` |
+| `archived_at` | datetime string | ja | Zeitpunkt der Archivierung |
+| `deleted_at` | datetime string | ja | Zeitpunkt des Soft-Delete |
+
+### `GET /documents`
+
+Zusaetzliche Query-Parameter:
+
+| Name | Typ | Required | Default | Regel |
+|---|---|---:|---:|---|
+| `lifecycle_status` | string | nein | - | `active`, `archived`, `deleted` |
+| `include_archived` | boolean | nein | `false` | zeigt `archived` nur ohne expliziten Statusfilter zusaetzlich an |
+
+Verhaltensregeln:
+
+- Default ohne Filter: nur `active`
+- mit `lifecycle_status=archived`: nur archivierte Dokumente
+- `deleted` bleibt im Listenvertrag unsichtbar, auch wenn der Statuswert als Query gesendet wird
+- `include_archived=true` erweitert die Defaultliste um archivierte Dokumente, solange kein expliziter `lifecycle_status` gesetzt ist
+
+### `PATCH /documents/{document_id}/archive`
+
+Archiviert ein aktives Dokument.
+
+Response `200`:
+
+```json
+{
+  "document_id": "document-id",
+  "lifecycle_status": "archived",
+  "archived_at": "2026-05-05T12:00:00Z",
+  "deleted_at": null
+}
+```
+
+### `PATCH /documents/{document_id}/restore`
+
+Stellt ein archiviertes Dokument wieder auf `active`.
+
+Response `200`:
+
+```json
+{
+  "document_id": "document-id",
+  "lifecycle_status": "active",
+  "archived_at": null,
+  "deleted_at": null
+}
+```
+
+### `DELETE /documents/{document_id}`
+
+Soft-deleted ein aktives oder archiviertes Dokument.
+
+Response `200`:
+
+```json
+{
+  "document_id": "document-id",
+  "lifecycle_status": "deleted",
+  "archived_at": null,
+  "deleted_at": "2026-05-05T12:00:00Z"
+}
+```
+
+Soft-Delete-Regeln:
+
+- `deleted` ist terminal
+- Read-API, Liste und Search blenden `deleted` konsequent aus
+- Versionen, Chunks und historische Citations bleiben physisch erhalten
+
+Fehlercodes mit Lifecycle-Bezug:
+
+| HTTP Status | Code | Aktueller Einsatz |
+|---:|---|---|
+| `404` | `DOCUMENT_NOT_FOUND` | Dokument ist unbekannt oder bereits `deleted` |
+| `409` | `DOCUMENT_STATE_CONFLICT` | inkonsistenter Dokumentzustand im Read-Pfad |
+| `422` | `INVALID_LIFECYCLE_STATUS` | ungueltiger Querywert fuer `lifecycle_status` |
+
+Bekannte Einschraenkungen:
+
+- Es gibt keinen API-Pfad, um soft-geloeschte Dokumente wieder sichtbar zu machen.
+- Der Querywert `lifecycle_status=deleted` ist syntaktisch gueltig, bleibt aber fachlich leer, weil geloeschte Dokumente generell ausgeblendet werden.
+
+### `DELETE /documents/{document_id}`
+
+Fuehrt ein Soft-Delete aus.
+
+Response `200`:
+
+```json
+{
+  "document_id": "document-id",
+  "lifecycle_status": "deleted",
+  "archived_at": null,
+  "deleted_at": "2026-05-05T12:00:00Z"
+}
+```
+
+### Lifecycle-Fehler
+
+| Status | Code | Bedeutung |
+|---:|---|---|
+| `404` | `DOCUMENT_NOT_FOUND` | Dokument fehlt oder ist bereits soft deleted |
+| `409` | `DOCUMENT_STATE_CONFLICT` | ungueltige Transition |
+| `422` | `INVALID_LIFECYCLE_STATUS` | ungueltiger Listenfilter |
+
 ## M3c Chat Contract
 
 ### `POST /api/v1/chat/sessions`
@@ -183,6 +555,145 @@ Response `201` `ChatSessionSummary`:
 ### `GET /api/v1/chat/sessions`
 
 Listet Sessions eines Workspaces.
+
+## M4d Admin Diagnostics Contract
+
+### `GET /api/v1/admin/diagnostics`
+
+Liefert eine redigierte Systemdiagnose fuer Administratoren.
+
+Autorisierung:
+
+- gueltige Session erforderlich
+- Admin- oder Owner-Rolle erforderlich
+
+Response `200`:
+
+```json
+{
+  "generated_at": "2026-05-05T14:00:00Z",
+  "workspace_scope": "workspace-1",
+  "overall_status": "ok",
+  "cards": {
+    "database": {
+      "status": "ok",
+      "label": "DB erreichbar",
+      "details": {
+        "reachable": true,
+        "latency_ms": 18
+      }
+    },
+    "migrations": {
+      "status": "ok",
+      "label": "Migration Head aktuell",
+      "details": {
+        "current_revision": "20260505_0013",
+        "head_revision": "20260505_0013",
+        "at_head": true
+      }
+    },
+    "documents": {
+      "status": "ok",
+      "label": "Dokumente und Chunks",
+      "details": {
+        "document_count": 128,
+        "chunk_count": 6421,
+        "archived_document_count": 12,
+        "deleted_document_count": 3
+      }
+    },
+    "imports": {
+      "status": "warning",
+      "label": "Import-Stabilitaet",
+      "details": {
+        "parser_error_rate_24h": 0.083,
+        "successful_imports_24h": 44,
+        "failed_imports_24h": 4,
+        "last_imports": [
+          {
+            "import_id": "imp-1",
+            "finished_at": "2026-05-05T13:42:00Z",
+            "status": "failed",
+            "error_code": "PARSER_FAILED"
+          }
+        ]
+      }
+    },
+    "search": {
+      "status": "ok",
+      "label": "Search Index",
+      "details": {
+        "backend": "postgresql_fts",
+        "index_ready": true,
+        "missing_search_vectors": 0,
+        "stale_current_documents": 0
+      }
+    },
+    "chat_rag": {
+      "status": "warning",
+      "label": "Chat/RAG",
+      "details": {
+        "chat_error_rate_24h": 0.041,
+        "retrieval_error_rate_24h": 0.018,
+        "llm_unavailable_rate_24h": 0.006
+      }
+    }
+  },
+  "errors": [
+    {
+      "id": "diag-1",
+      "severity": "warning",
+      "source": "imports",
+      "code": "PARSER_FAILED",
+      "message": "Parser-Fehlerquote der letzten 24h liegt ueber dem Grenzwert.",
+      "technical_details": {
+        "window_hours": 24,
+        "failed_imports": 4,
+        "successful_imports": 44,
+        "threshold": 0.05
+      }
+    }
+  ]
+}
+```
+
+Vertragsregeln:
+
+- nur aggregierte Kennzahlen und redigierte technische Details
+- keine Dokumenttexte, keine Chunk-Texte, keine Prompts, keine Chat-Inhalte
+- `workspace_scope` wird serverseitig aus dem Admin-Kontext abgeleitet
+
+Fehler:
+
+| Status | Code | Bedeutung |
+|---:|---|---|
+| `401` | `AUTH_REQUIRED` | keine gueltige Session |
+| `403` | `ADMIN_REQUIRED` | kein Admin- oder Owner-Zugriff |
+| `503` | `SERVICE_UNAVAILABLE` | Diagnosedaten nicht oder nur teilweise verfuegbar |
+
+## M4e Backup and Restore Proposal
+
+M4e ist bewusst CLI-first. Restore wird nicht als normaler Endnutzer-HTTP-Flow definiert.
+
+Empfohlene CLI-Befehle:
+
+- `python -m app.cli backup create --output <path>`
+- `python -m app.cli backup validate --input <path>`
+- `python -m app.cli backup restore --input <path> --target <env>`
+- `python -m app.cli search rebuild-index`
+
+Optionale spaetere Admin-API:
+
+- `POST /api/v1/admin/backups`
+- `POST /api/v1/admin/backups/validate`
+- `POST /api/v1/admin/search/rebuild-index`
+
+Vertragsregeln:
+
+- Backup umfasst Datenbank, technische Originaldatei-Kopien und Konfiguration.
+- Search-Index ist rekonstruierbar und kein Pflichtbestandteil des Backup-Artefakts.
+- Restore schliesst stets Integritaetspruefung und `alembic upgrade head` ein.
+- Diagnostics- oder Backup-Pfade duerfen keine Dokumenttexte offenlegen.
 
 Query Parameter:
 

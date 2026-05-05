@@ -188,4 +188,134 @@ describe('DocumentsPage', () => {
     expect(await screen.findByText('Ungueltige Suche')).toBeInTheDocument();
     expect(screen.getByText(/Fehlercode: INVALID_QUERY/i)).toBeInTheDocument();
   });
+
+  it('uploads a document through the queued import flow and refreshes the list', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-1',
+          job_type: 'document_import',
+          status: 'queued',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: null,
+          filename: 'notes.txt',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: null,
+          finished_at: null,
+          progress_current: 0,
+          progress_total: 1,
+          progress_message: 'Import ist in Warteschlange',
+          error_code: null,
+          error_message: null,
+          result: null,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-1',
+          job_type: 'document_import',
+          status: 'completed',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: null,
+          filename: 'notes.txt',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: '2026-05-05T00:00:01Z',
+          finished_at: '2026-05-05T00:00:02Z',
+          progress_current: 1,
+          progress_total: 1,
+          progress_message: 'Import abgeschlossen',
+          error_code: null,
+          error_message: null,
+          result: {
+            document_id: 'doc-2',
+            version_id: 'ver-2',
+            import_status: 'chunked',
+            duplicate_of_document_id: null,
+            chunk_count: 4,
+            parser_type: 'txt-parser',
+            warnings: [],
+          },
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([
+          {
+            id: 'doc-2',
+            title: 'notes',
+            mime_type: 'text/plain',
+            created_at: '2026-05-05T00:00:02Z',
+            updated_at: '2026-05-05T00:00:02Z',
+            latest_version_id: 'ver-2',
+            import_status: 'chunked',
+            version_count: 1,
+            chunk_count: 4,
+          },
+        ]),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Keine Dokumente vorhanden')).toBeInTheDocument();
+
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByLabelText('Datei'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dokument importieren' }));
+
+    expect(await screen.findByText(/notes.txt erfolgreich verarbeitet/i)).toBeInTheDocument();
+    expect(screen.getByText('doc-2')).toBeInTheDocument();
+    expect(await screen.findByText('notes')).toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it('renders normalized queued upload job status labels', async () => {
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-queued',
+          job_type: 'document_import',
+          status: 'queued',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: null,
+          filename: 'notes.txt',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: null,
+          finished_at: null,
+          progress_current: 0,
+          progress_total: 1,
+          progress_message: null,
+          error_code: null,
+          error_message: null,
+          result: null,
+        }),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Keine Dokumente vorhanden')).toBeInTheDocument();
+
+    const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    fireEvent.change(screen.getByLabelText('Datei'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Dokument importieren' }));
+
+    expect(await screen.findByText('In Warteschlange')).toBeInTheDocument();
+    expect(screen.getByText('Import wartet auf Ausfuehrung.')).toBeInTheDocument();
+  });
 });

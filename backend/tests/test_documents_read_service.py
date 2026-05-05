@@ -15,7 +15,7 @@ class FakeDocumentRepository:
         self.detail = detail
         self.documents = documents or []
 
-    def get_documents(self, *, workspace_id: str, limit: int, offset: int):
+    def get_documents(self, *, workspace_id: str, limit: int, offset: int, lifecycle_status=None, include_archived=False):
         return self.documents
 
     def get_document_detail(self, document_id: str) -> DocumentDetailRecord | None:
@@ -50,6 +50,9 @@ def test_get_document_detail_maps_repository_record_without_fastapi_or_database(
                 updated_at=created_at,
                 latest_version_id="version-1",
                 import_status="chunked",
+                lifecycle_status="active",
+                archived_at=None,
+                deleted_at=None,
                 version_id="version-1",
                 version_number=1,
                 version_created_at=created_at,
@@ -96,6 +99,9 @@ def test_get_document_detail_raises_conflict_for_document_without_version() -> N
                 updated_at=created_at,
                 latest_version_id=None,
                 import_status="chunked",
+                lifecycle_status="active",
+                archived_at=None,
+                deleted_at=None,
                 version_id=None,
                 version_number=None,
                 version_created_at=None,
@@ -133,6 +139,9 @@ def test_get_document_detail_returns_pending_document_without_version() -> None:
                 updated_at=created_at,
                 latest_version_id=None,
                 import_status="pending",
+                lifecycle_status="active",
+                archived_at=None,
+                deleted_at=None,
                 version_id=None,
                 version_number=None,
                 version_created_at=None,
@@ -174,6 +183,9 @@ def test_get_document_detail_raises_conflict_for_completed_version_without_chunk
                 updated_at=created_at,
                 latest_version_id="version-1",
                 import_status="chunked",
+                lifecycle_status="active",
+                archived_at=None,
+                deleted_at=None,
                 version_id="version-1",
                 version_number=1,
                 version_created_at=created_at,
@@ -208,6 +220,9 @@ def test_get_documents_maps_stable_list_fields_without_fastapi_or_database() -> 
                     updated_at=created_at,
                     latest_version_id="version-1",
                     import_status="chunked",
+                    lifecycle_status="active",
+                    archived_at=None,
+                    deleted_at=None,
                     version_count=2,
                     chunk_count=7,
                 )
@@ -221,6 +236,7 @@ def test_get_documents_maps_stable_list_fields_without_fastapi_or_database() -> 
     assert documents[0].id == "document-1"
     assert documents[0].mime_type == "text/plain"
     assert documents[0].latest_version_id == "version-1"
+    assert documents[0].lifecycle_status == "active"
     assert documents[0].version_count == 2
     assert documents[0].chunk_count == 7
 

@@ -155,25 +155,211 @@ Begruendung:
 - Die GUI konsumiert den echten Chat-Vertrag.
 - Restpunkte wie produktiver LLM Provider, Streaming, Agenten, Embeddings und Browser-E2E sind M4- oder spaetere Scope-Themen und blockieren M3c nicht.
 
-## M4 Integrierter Wissensbasis-Chat
+## M4 Produktisierung und Betriebsfaehigkeit
 
 Stand des Abgleichs mit Code und Dokumentation am 2026-05-05:
 
-- M4 ist noch nicht implementiert.
+- M4 ist teilweise implementiert.
 - Die dafuer benoetigte M3c-Foundation ist abgeschlossen.
 
-Naechste Integrationsbausteine fuer M4:
+Zielbild:
 
-- produktiven LLM Provider konfigurieren
-- Provider-Fehler, Timeouts und Betriebsgrenzen haerten
-- optional Streaming definieren
-- Chat-Funktionen fuer Produktbetrieb erweitern
-- keine Dokumentmutation ohne gesondertes M5-Gate
+- M4 stabilisiert den lokalen Produktbetrieb statt neue Intelligenz-Schichten einzufuehren.
+- Der Fokus liegt auf Benutzerkonzept, Isolation, Upload, Lifecycle, Diagnose, Observability, Backup/Restore, Performance und Betriebsdokumentation.
+
+In Scope fuer M4:
+
+- Authentifizierung und Benutzerkonzept
+- Workspace-Isolation
+- Upload-GUI
+- Dokument-Lifecycle
+- Admin- und Diagnoseansicht
+- Observability
+- Backup/Restore
+- Performance-Haertung
+- Deployment-Dokumentation
+
+### M4a Authentifizierung und Workspace-Isolation
+
+Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
+
+- Ein vollstaendiges M4a-Auth-Modell mit Login, Logout, Session, Memberships und serverseitig aufgeloestem `current_user`/`current_workspace` ist im vorliegenden Code **nicht** nachweisbar.
+- Implementiert ist derzeit nur ein schmaler Admin-Schutz fuer den Search-Index-Rebuild ueber `x-admin-token`.
+- Workspace-Bezug ist im Fachvertrag sichtbar, wird aber fuer die meisten Endpunkte weiterhin ueber `workspace_id` in Query oder Body transportiert.
+- Der Upload verwendet noch einen serverseitigen Default-Kontext aus `settings.default_workspace_id` und `settings.default_user_id`.
+- Frontend-Routen wie Dokumente und Chat arbeiten weiterhin mit `workspace_id` im Query-String; Teile der GUI fallen auf einen hart codierten Default-Workspace zurueck.
+
+Betroffene Endpunkte im aktuellen Stand:
+
+- `GET /documents?workspace_id=...`
+- `POST /documents/import`
+- `GET /api/v1/search/chunks?workspace_id=...`
+- `POST /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions?workspace_id=...`
+- `POST /api/v1/chat/sessions/{session_id}/messages`
+- `POST /api/v1/admin/search-index/rebuild` mit `x-admin-token`
+
+Nachweisbare Fehlercodes mit M4a-Bezug:
+
+- `WORKSPACE_REQUIRED`
+- `AUTH_REQUIRED`
+- `ADMIN_REQUIRED`
+
+Bekannte Einschraenkungen:
+
+- keine implementierten Endpunkte `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
+- keine nachweisbare Tabelle `auth_sessions`
+- keine nachweisbare Tabelle `workspace_memberships`
+- keine serverseitige Membership-Pruefung fuer Dokument-, Search- oder Chat-Endpunkte
+- keine CSRF- oder Cookie-Session-Implementierung
+- Frontend vertraut weiterhin auf `workspace_id` im URL-Kontext
+
+Nicht-Scope, das weiterhin nicht geliefert ist:
+
+- OAuth
+- SSO
+- externe Identity Provider
+- feingranulare Rollenmodelle
+- Enterprise-Berechtigungen
+
+Abschlussbewertung fuer M4a:
+
+- Dokumentation: jetzt aktualisiert
+- Konsistenz mit dem implementierten Code: **nicht ausreichend fuer Abschluss**
+- Entscheidung: `nicht abgeschlossen`
+
+### M4b Upload-GUI
+
+Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
+
+- Die Upload-GUI ist in der Dokumentuebersicht implementiert und nutzt den asynchronen Importpfad mit Hintergrundjob-Polling.
+- `POST /documents/import` liefert `202 Accepted` mit einem `document_import`-Job; die GUI pollt anschliessend den Jobstatus.
+- Erfolgreiche Importe werden in der GUI als generischer Erfolg mit Dateiname, Dokument-ID und Chunk-Anzahl angezeigt.
+- Fehler aus dem Importpfad werden nicht mehr synchron am Upload-Endpunkt erwartet, sondern erscheinen als `failed`-Job mit `error_code` und `error_message`.
+- Duplicate- und OCR-Faelle sind im Backend und in Tests nachweisbar, aber in der GUI nicht als eigene spezialisierte Ergebnisflaechen umgesetzt.
+
+Upload-Flow im aktuellen Stand:
+
+- Datei in `/documents` auswaehlen
+- `POST /documents/import` ausloesen
+- Jobstatus ueber `GET /api/v1/jobs/{job_id}` pollen
+- bei `completed`: Ergebnis anzeigen und Dokumentliste neu laden
+- bei `failed`: generischen Fehlerzustand mit gemapptem Fehlercode anzeigen
+
+Importstatus im aktuellen Stand:
+
+- Jobstatus: `queued`, `running`, `completed`, `failed`
+- fachlicher Importstatus im Jobergebnis: insbesondere `chunked` oder `duplicate`
+
+Nachweisbare Fehlercodes mit M4b-Bezug:
+
+- `FILE_TOO_LARGE`
+- `UNSUPPORTED_FILE_TYPE`
+- `PARSER_FAILED`
+- `OCR_REQUIRED`
+- `JOB_NOT_FOUND`
+- `NETWORK_ERROR` im Frontend-Mapping
+
+Duplicate-Verhalten:
+
+- Duplicate Detection ist im Backend nachweisbar und liefert `import_status = duplicate` sowie `duplicate_of_document_id`.
+- Die aktuelle GUI behandelt den Abschlussfall aber generisch und zeigt keinen dedizierten Duplicate-Hinweis oder eine gesonderte Aktion fuer das vorhandene Dokument.
+
+OCR-required-Verhalten:
+
+- OCR-Bedarf fuehrt im Hintergrundjob zu `status = failed` und `error_code = OCR_REQUIRED`.
+- Die GUI zeigt diesen Fall ueber den allgemeinen ErrorState mit gemapptem Fehler-Titel an, ohne spezialisierten OCR-Hinweis oder Folgeaktion.
+
+Bekannte Einschraenkungen:
+
+- kein Direkt-Sprung in die Dokumentdetailansicht nach erfolgreichem Import
+- kein dedizierter Duplicate-Ergebniszustand
+- kein dedizierter OCR-Ergebniszustand
+- Polling ohne exponentielles Backoff oder sichtbare Retry-Strategie
+- Upload nutzt serverseitig weiterhin den Default-Workspace- und Default-User-Kontext
+- Dokumentseite faellt im Frontend weiterhin auf einen Default-Workspace im Query-Kontext zurueck
+
+Abschlussbewertung fuer M4b:
+
+- Dokumentation: jetzt aktualisiert
+- Konsistenz mit dem implementierten Code: **nicht ausreichend fuer Abschluss**
+- Entscheidung: `nicht abgeschlossen`
+
+### M4c Dokument-Lifecycle
+
+Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
+
+- Der Dokument-Lifecycle ist im Backend durchgaengig mit `active`, `archived` und `deleted` implementiert.
+- Listen-, Read-, Search- und Chat-Pfade verarbeiten diese Stati konsistent.
+- Soft-Delete wird ueber `lifecycle_status = deleted` plus `deleted_at` modelliert; physische Folgeobjekte bleiben erhalten.
+- Historische Chat-Citations bleiben auch fuer spaeter geloeschte Dokumente sichtbar.
+
+Lifecycle-Regeln im aktuellen Stand:
+
+- `active`: Standardzustand, in Liste, Search und neuem Chat-Retrieval sichtbar
+- `archived`: nur ueber Listenfilter sichtbar, nicht suchbar und nicht fuer neue Chat-Antworten retrievable
+- `deleted`: Soft-Delete, nicht mehr ueber Read-API oder Search zugreifbar
+
+Auswirkungen auf Liste, Suche und Chat:
+
+- `GET /documents` zeigt standardmaessig nur `active`
+- `GET /documents?lifecycle_status=archived` zeigt archivierte Dokumente gezielt an
+- `deleted` ist im Listenpfad effektiv unsichtbar
+- Search schliesst alles ausser `active` aus
+- neue RAG-Antworten nutzen keine archivierten oder geloeschten Dokumente
+- bestehende Chat-Citations bleiben bei geloeschten Dokumenten historisch lesbar
+
+Soft-Delete-Regeln:
+
+- `DELETE /documents/{document_id}` setzt `lifecycle_status = deleted` und `deleted_at`
+- Versionen, Chunks und Citations werden nicht physisch geloescht
+- `deleted` ist terminal; eine Restore-Transition fuer geloeschte Dokumente ist nicht implementiert
+
+Bekannte Einschraenkungen:
+
+- `lifecycle_status=deleted` ist als Querywert formal akzeptiert, liefert im Listenpfad aber keine geloeschten Dokumente zurueck
+- kein separater Purge-/Hard-Delete-Betriebsprozess
+- keine dedizierte Admin-Ansicht fuer geloeschte Dokumente
+- Lifecycle-Steuerung ist derzeit backendseitig dokumentiert, aber nicht als eigener Frontend-Management-Flow verifiziert
+
+Abschlussbewertung fuer M4c:
+
+- Dokumentation: jetzt aktualisiert
+- Konsistenz mit dem implementierten Code: **ausreichend fuer Abschluss**
+- Entscheidung: `abgeschlossen`
+
+### M4e Backup/Restore
+
+Stand des Abgleichs mit Dokumentation am 2026-05-05:
+
+- M4e ist als Konzept definiert.
+- Das bestehende System speichert Originaldateien aktuell noch nicht dauerhaft; ein vollstaendiges M4e-Backup erfordert daher eine neue technische Dateiablage fuer Restore-Zwecke.
+- Backup ist fuer M4e als CLI-first Betriebsprozess definiert.
+- Search-Index ist als rekonstruierbar spezifiziert, nicht als primaeres Backup-Artefakt.
 
 Entscheidung:
 
-- Status fuer M4: `missing`
-- Startfreigabe: `Go`
+- Status fuer M4e: `defined`
+- Implementierungsstatus: `missing`
+
+Nicht-Scope fuer M4:
+
+- Agenten
+- automatische Aktionen
+- komplexe Workflows
+- Multi-User-Collaboration
+- Enterprise-Rollenmodell
+- externe Integrationen
+
+Abhaengigkeiten zu M3:
+
+- M4 setzt auf M3a GUI-Grundstruktur, M3b Retrieval und M3c Chat/RAG Foundation auf.
+- M4 darf vorhandene M3-Faehigkeiten haerten, aber keine neue Intelligenz-Schicht erzwingen.
+
+Entscheidung:
+
+- Status fuer M4: `partial`
+- Startfreigabe fuer weitere M4-Slices: `Go`, aber M4a selbst bleibt offen
 
 ## Ground Truth = Code, nicht Dokumentation
 

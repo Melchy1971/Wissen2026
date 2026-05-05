@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -165,10 +165,13 @@ class ChatPersistenceService:
         return chat_message
 
     def _next_message_index(self, *, session_id: str) -> int:
-        current_max = self._session.scalar(
-            select(func.max(ChatMessage.message_index)).where(ChatMessage.session_id == session_id)
+        latest_index = self._session.scalar(
+            select(ChatMessage.message_index)
+            .where(ChatMessage.session_id == session_id)
+            .order_by(desc(ChatMessage.message_index))
+            .limit(1)
         )
-        return 0 if current_max is None else int(current_max) + 1
+        return 0 if latest_index is None else int(latest_index) + 1
 
     def _validate_citation_payload(self, citation: ChatCitationPayload) -> None:
         if not citation.chunk_id.strip():

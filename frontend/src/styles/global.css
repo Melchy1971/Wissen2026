@@ -498,6 +498,57 @@ button:focus-visible {
 	gap: 1rem;
 }
 
+.diagnostics-card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+	gap: 1rem;
+}
+
+.diagnostics-card {
+	display: grid;
+	gap: 1rem;
+	padding: 1rem;
+	border: 1px solid var(--color-border-subtle);
+	border-radius: var(--radius-lg);
+	background: linear-gradient(180deg, var(--t-white) 0%, var(--t-gray-05) 100%);
+}
+
+.diagnostics-card--accent {
+	border-color: var(--t-magenta-20);
+	background: linear-gradient(180deg, var(--t-white) 0%, var(--t-magenta-light) 100%);
+}
+
+.diagnostics-card__text {
+	color: var(--t-gray-80);
+	line-height: 1.6;
+}
+
+.diagnostics-list {
+	margin: 0;
+	padding-left: 1.2rem;
+	display: grid;
+	gap: 0.55rem;
+	color: var(--t-gray-80);
+}
+
+.diagnostics-result {
+	display: grid;
+	gap: 1rem;
+}
+
+.diagnostics-code-block {
+	margin: 0;
+	padding: 1rem;
+	border-radius: var(--radius-lg);
+	border: 1px solid var(--color-border-subtle);
+	background: var(--t-black);
+	color: var(--t-white);
+	overflow-x: auto;
+	font-family: 'Cascadia Code', Consolas, monospace;
+	font-size: 0.82rem;
+	line-height: 1.55;
+}
+
 /* ── Stack List ─────────────────────────────────────────────── */
 .stack-list {
 	margin: 0;

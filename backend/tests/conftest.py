@@ -15,7 +15,9 @@ from app.api import documents as documents_api
 from app.main import app
 from app.models.documents import Base, Chunk, Document, DocumentVersion
 from app.repositories.documents import DocumentRepository
+from app.services.documents.lifecycle_service import DocumentLifecycleService
 from app.services.documents.read_service import DocumentReadService
+from app.services.jobs.background_jobs import BackgroundJobService
 
 
 TEST_TEMP_ROOT = Path(__file__).resolve().parents[1] / ".pytest-tmp"
@@ -206,7 +208,15 @@ def client(db_session: Session) -> Iterator[TestClient]:
     def override_document_read_service() -> Iterator[DocumentReadService]:
         yield DocumentReadService(DocumentRepository(db_session))
 
+    def override_document_lifecycle_service() -> Iterator[DocumentLifecycleService]:
+        yield DocumentLifecycleService.from_session(db_session)
+
+    def override_background_job_service() -> Iterator[BackgroundJobService]:
+        yield BackgroundJobService.from_session(db_session)
+
     app.dependency_overrides[documents_api.get_document_read_service] = override_document_read_service
+    app.dependency_overrides[documents_api.get_document_lifecycle_service] = override_document_lifecycle_service
+    app.dependency_overrides[documents_api.get_background_job_service] = override_background_job_service
     try:
         yield TestClient(app)
     finally:

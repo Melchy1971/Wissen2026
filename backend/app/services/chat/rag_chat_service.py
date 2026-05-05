@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from time import perf_counter
 from typing import Any, Protocol
 
 from app.core.errors import (
@@ -11,6 +12,7 @@ from app.core.errors import (
 )
 from app.schemas.chat import ChatCitationResponse, ChatConfidenceResponse, ChatMessageResponse
 from app.schemas.search import SearchChunkResult
+from app.observability.logging import bind_observability_context, log_event
 from app.services.chat.citation_mapper import Citation, CitationMapper, CitationMappingError
 from app.services.chat.context_builder import ContextBuildError, ContextBuilder
 from app.services.chat.insufficient_context_policy import InsufficientContextPolicy
@@ -82,6 +84,8 @@ class RagChatService:
         question: str,
         retrieval_limit: int | None = None,
     ) -> ChatMessageResponse:
+        started_at = perf_counter()
+        bind_observability_context(workspace_id=workspace_id)
         normalized_question = question.strip()
         if not normalized_question:
             raise InsufficientContextApiError(message="question must not be blank", details={"session_id": session_id})
@@ -105,6 +109,13 @@ class RagChatService:
             context=context,
         )
         if not decision.sufficient_context:
+            log_event(
+                "rag_insufficient_context",
+                workspace_id=workspace_id,
+                duration_ms=int((perf_counter() - started_at) * 1000),
+                status="failed",
+                error_code="INSUFFICIENT_CONTEXT",
+            )
             raise InsufficientContextApiError(
                 message=decision.reason or "Insufficient context",
                 details={
@@ -133,6 +144,13 @@ class RagChatService:
                 "retrieval_score_max": decision.retrieval_score_max,
                 "retrieval_score_avg": decision.retrieval_score_avg,
             },
+        )
+
+        log_event(
+            "chat_message_created",
+            workspace_id=workspace_id,
+            duration_ms=int((perf_counter() - started_at) * 1000),
+            status="completed",
         )
 
         return ChatMessageResponse(
@@ -191,9 +209,19 @@ class RagChatService:
         try:
             response = self._llm_provider.generate(prompt.system_prompt, prompt.user_prompt)
         except Exception as exc:
+            log_event(
+                "llm_unavailable",
+                status="failed",
+                error_code="LLM_UNAVAILABLE",
+            )
             raise LlmUnavailableApiError(message=str(exc)) from exc
 
         if not response.strip():
+            log_event(
+                "llm_unavailable",
+                status="failed",
+                error_code="LLM_UNAVAILABLE",
+            )
             raise LlmUnavailableApiError(message="LLM returned an empty response")
         return response.strip()
 

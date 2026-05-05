@@ -299,6 +299,33 @@ def test_get_chat_session_detail_returns_messages_and_filtered_citations() -> No
     assert "metadata_" not in body["messages"][0]
 
 
+def test_get_chat_session_detail_keeps_historical_citations_visible_for_deleted_documents() -> None:
+    service = FakeChatService()
+    service.citation = SimpleNamespace(
+        id="citation-deleted-1",
+        message_id="message-1",
+        chunk_id="chunk-deleted-1",
+        document_id="document-deleted-1",
+        source_anchor=source_anchor(),
+    )
+    install_fake_service(service)
+    try:
+        response = TestClient(app).get("/api/v1/chat/sessions/session-1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    citations = response.json()["messages"][0]["citations"]
+    assert citations == [
+        {
+            "chunk_id": "chunk-deleted-1",
+            "document_id": "document-deleted-1",
+            "source_anchor": source_anchor(),
+            "quote_preview": None,
+        }
+    ]
+
+
 def test_get_chat_session_detail_returns_404_for_unknown_session() -> None:
     service = FakeChatService()
     install_fake_service(service)

@@ -1,42 +1,112 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { getDocuments, searchChunks } from '../api/documents.js';
+import { getDocuments, importDocument, searchChunks } from '../api/documents.js';
+import { getJob } from '../api/jobs.js';
 import { DocumentTable } from '../components/documents/DocumentTable.jsx';
 import { SearchResultList } from '../components/documents/SearchResultList.jsx';
 import { EmptyState } from '../components/status/EmptyState.jsx';
 import { ErrorState } from '../components/status/ErrorState.jsx';
 import { LoadingState } from '../components/status/LoadingState.jsx';
-import { mapDocumentListItem, mapError, mapSearchResult } from '../view-models/mappers.js';
+import { mapDocumentListItem, mapError, mapJobStatus, mapSearchResult } from '../view-models/mappers.js';
 
 export function DocumentsPage() {
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspace_id') || '00000000-0000-0000-0000-000000000001';
   const [state, setState] = useState({ status: 'loading', items: [], error: null });
   const [searchState, setSearchState] = useState({ status: 'idle', items: [], error: null, query: '' });
+  const [uploadState, setUploadState] = useState({ status: 'idle', fileName: '', job: null, result: null, error: null });
   const [queryInput, setQueryInput] = useState('');
+  const pollTimeoutRef = useRef(null);
+  const uploadJobState = mapJobStatus(uploadState.job);
+
+  async function loadDocuments({ cancelled = false } = {}) {
+    setState({ status: 'loading', items: [], error: null });
+    try {
+      const response = await getDocuments({ workspaceId, limit: 20, offset: 0 });
+      if (cancelled) return;
+      const items = response.map(mapDocumentListItem);
+      setState({ status: 'success', items, error: null });
+    } catch (error) {
+      if (cancelled) return;
+      setState({ status: 'error', items: [], error: mapError(error) });
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load() {
-      setState({ status: 'loading', items: [], error: null });
-      try {
-        const response = await getDocuments({ workspaceId, limit: 20, offset: 0 });
-        if (cancelled) return;
-        const items = response.map(mapDocumentListItem);
-        setState({ status: 'success', items, error: null });
-      } catch (error) {
-        if (cancelled) return;
-        setState({ status: 'error', items: [], error: mapError(error) });
-      }
-    }
-
-    load();
+    void loadDocuments({ cancelled });
     return () => {
       cancelled = true;
     };
   }, [workspaceId]);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  async function pollImportJob(jobId, fileName) {
+    try {
+      const job = await getJob(jobId);
+      if (job.status === 'completed') {
+        setUploadState({ status: 'success', fileName, job, result: job.result, error: null });
+        await loadDocuments();
+        return;
+      }
+      if (job.status === 'failed') {
+        setUploadState({
+          status: 'error',
+          fileName,
+          job,
+          result: null,
+          error: mapError({ code: job.error_code, message: job.error_message, details: {} }),
+        });
+        return;
+      }
+
+      setUploadState({ status: 'polling', fileName, job, result: null, error: null });
+      pollTimeoutRef.current = setTimeout(() => {
+        void pollImportJob(jobId, fileName);
+      }, 250);
+    } catch (error) {
+      setUploadState({ status: 'error', fileName, job: null, result: null, error: mapError(error) });
+    }
+  }
+
+  async function handleUploadSubmit(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const file = form.elements.file?.files?.[0];
+    if (!file) {
+      setUploadState({
+        status: 'error',
+        fileName: '',
+        job: null,
+        result: null,
+        error: {
+          code: 'FILE_REQUIRED',
+          title: 'Datei fehlt',
+          message: 'Bitte waehle eine Datei fuer den Import aus.',
+        },
+      });
+      return;
+    }
+
+    setUploadState({ status: 'loading', fileName: file.name, job: null, result: null, error: null });
+    try {
+      const job = await importDocument(file);
+      setUploadState({ status: 'polling', fileName: file.name, job, result: null, error: null });
+      form.reset();
+      void pollImportJob(job.id, file.name);
+    } catch (error) {
+      setUploadState({ status: 'error', fileName: file.name, job: null, result: null, error: mapError(error) });
+    }
+  }
 
   async function handleSearchSubmit(event) {
     event.preventDefault();
@@ -78,6 +148,65 @@ export function DocumentsPage() {
         </div>
         <p className="page-header__meta">Workspace: {workspaceId}</p>
       </div>
+      <section className="panel">
+        <div className="panel__header search-bar__header">
+          <div>
+            <p className="panel__eyebrow">Import</p>
+            <h3>Dokument hochladen</h3>
+          </div>
+        </div>
+        <form className="search-bar" onSubmit={handleUploadSubmit}>
+          <label className="search-bar__field">
+            <span className="search-bar__label">Datei</span>
+            <input type="file" name="file" accept=".txt,.md,.docx,.doc,.pdf" />
+          </label>
+          <div className="search-bar__actions">
+            <button type="submit" disabled={uploadState.status === 'loading' || uploadState.status === 'polling'}>
+              {uploadState.status === 'loading' || uploadState.status === 'polling' ? 'Upload laeuft...' : 'Dokument importieren'}
+            </button>
+          </div>
+        </form>
+
+        {uploadState.status === 'polling' ? (
+          <div className="meta-grid">
+            <div>
+              <dt>Job-ID</dt>
+              <dd>{uploadState.job?.id}</dd>
+            </div>
+            <div>
+              <dt>Datei</dt>
+              <dd>{uploadState.fileName}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{uploadJobState.label}</dd>
+            </div>
+            <div>
+              <dt>Fortschritt</dt>
+              <dd>{uploadJobState.message}</dd>
+            </div>
+          </div>
+        ) : null}
+
+        {uploadState.status === 'success' ? (
+          <div className="meta-grid">
+            <div>
+              <dt>Import</dt>
+              <dd>{uploadState.fileName} erfolgreich verarbeitet</dd>
+            </div>
+            <div>
+              <dt>Dokument</dt>
+              <dd>{uploadState.result?.document_id || 'unbekannt'}</dd>
+            </div>
+            <div>
+              <dt>Chunks</dt>
+              <dd>{uploadState.result?.chunk_count ?? 0}</dd>
+            </div>
+          </div>
+        ) : null}
+
+        {uploadState.status === 'error' ? <ErrorState error={uploadState.error} /> : null}
+      </section>
       <section className="panel">
         <div className="panel__header search-bar__header">
           <div>

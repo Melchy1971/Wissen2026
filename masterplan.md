@@ -4,7 +4,7 @@
 **Ground Truth:** Code und Migrationen sind verbindlich. Dokumentation beschreibt den Stand, entscheidet ihn aber nicht.  
 **Ziel:** Eine robuste Wissensbasis, in der Dokumente importiert, normalisiert, versioniert, als Chunks lesbar gemacht, spaeter durchsucht und im Chat/Analysekontext verwendet werden koennen.
 
-V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind datenmodellseitig vorbereitet, aber noch keine Produktfunktion. Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retrieval hergestellt.
+Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retrieval hergestellt. Der dokumentierte M4a-Zielzustand fordert Authentifizierung und serverseitige Workspace-Isolation, ist im vorliegenden Code aber noch nicht konsistent abgeschlossen.
 
 ---
 
@@ -17,8 +17,8 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Datenbank | PostgreSQL als Ziel-DB | Schema und Alembic-Migrationen vorhanden |
 | Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | ✅ implementiert |
 | Migrationen | Alembic | ✅ implementiert |
-| Auth V1 | Nicht implementieren | gilt weiterhin |
-| Mehrbenutzer | Datenmodell vorbereiten, Logik spaeter | vorbereitet |
+| Auth V1 | M4a fuehrt Auth und Workspace-Isolation als Produktthema ein | Zielbild definiert, im Code nicht konsistent abgeschlossen |
+| Mehrbenutzer | Datenmodell vorbereiten, Logik spaeter | vorbereitet, aber keine echte Membership-Logik nachweisbar |
 | Originaldateien | Nicht speichern | gilt weiterhin |
 | Kanonischer Inhalt | `document_versions.normalized_markdown` | ✅ implementiert |
 | Versionierung | Dokument zeigt ueber `current_version_id` auf aktuelle Version | ✅ implementiert |
@@ -32,7 +32,7 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Chat | nach M3 | ✅ M3c Chat/RAG Foundation abgeschlossen |
 | Analyse | nach Chat/Retrieval-Grundlage | vorbereitet im Datenmodell, Fachlogik fehlt |
 | Vektorsuche | optional, nicht V1-kritisch | fehlt |
-| Backup/Restore | spaeterer Betriebsmeilenstein | fehlt |
+| Backup/Restore | Teil der M4-Produktisierung, weitergehende Automatisierung spaeter | fehlt |
 
 ---
 
@@ -81,8 +81,8 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 ### Missing
 
 - OCR-Engine.
-- Authentifizierung und Autorisierung.
-- echte Workspace-/User-Verwaltung.
+- Authentifizierung und Autorisierung fuer regulare Fachendpunkte.
+- echte Workspace-/User-Verwaltung mit Memberships und Sessionkontext.
 - Embeddings.
 - Analyse-/Merge-/Refine-Fachlogik.
 - Backup-/Restore-Automatisierung.
@@ -161,7 +161,7 @@ Noch zu vereinheitlichen:
 
 ### Frontend
 
-React/Vite ist die gesetzte V1-GUI-Basis. Der GUI-Start war bewusst an das Paket-5-Gate gekoppelt und wurde danach fuer M3a umgesetzt. Aktuell existieren eine read-only Dokument-GUI, eine Retrieval-Suche in der Dokumentansicht und eine Chat-Oberflaeche gegen die echte Chat/RAG-API. M3c ist als Foundation abgeschlossen; M4 erweitert diese Grundlage um produktiven LLM-Betrieb.
+React/Vite ist die gesetzte V1-GUI-Basis. Der GUI-Start war bewusst an das Paket-5-Gate gekoppelt und wurde danach fuer M3a umgesetzt. Aktuell existieren eine Dokument-GUI, Retrieval-Suche, Chat-Oberflaeche, Upload-Job-UI und Admin-Diagnostik gegen die echte API. M4a ist dabei noch nicht konsistent abgeschlossen, weil Login, Sessionkontext und echte Workspace-Isolation in der GUI nicht nachweisbar umgesetzt sind.
 
 ### Datenbank
 
@@ -312,6 +312,109 @@ Erlaubte Typen:
 - KI-/Ollama-Normalisierung als aktiver Importschritt.
 - Parser-Confidence.
 - Vollstaendige Quellenpositionsdaten fuer alle Parser.
+
+---
+
+## M4a - Authentifizierung und Workspace-Isolation
+
+**Status:** partial, Abschluss aktuell nicht erreicht.
+
+**Ziel:** Jeder Request wird serverseitig einem authentifizierten Benutzer und einem autorisierten Workspace zugeordnet.
+
+### Nachweisbar implementiert
+
+- `AUTH_REQUIRED` und `ADMIN_REQUIRED` fuer den Admin-Rebuild mit `x-admin-token`
+- `WORKSPACE_REQUIRED` fuer mehrere fachliche Endpunkte
+- Workspace-Bezug in Dokument-, Search- und Chat-Vertraegen
+- vorbereitete `users`, `workspaces`, `owner_user_id` und `workspace_id` im Datenmodell
+
+### Nicht nachweisbar implementiert
+
+- `POST /auth/login`
+- `POST /auth/logout`
+- `GET /auth/me`
+- `workspace_memberships`
+- `auth_sessions`
+- serverseitiger `current_user`/`current_workspace`-Kontext fuer Fachendpunkte
+- Frontend-Login und Logout
+
+### Bekannte Einschraenkungen
+
+- Upload verwendet weiterhin Default-Kontext aus den Settings.
+- Dokumente und Chat verwenden weiterhin `workspace_id` im Query- oder Request-Kontext.
+- Frontend-Navigation ist nicht durch serverseitig aufgeloeste Memberships abgesichert.
+
+### Abschlussentscheidung
+
+- Dokumentationspflicht: erfuellt
+- M4a nach Code- und Dokuabgleich: **nicht abgeschlossen**
+
+---
+
+## M4b - Upload-GUI
+
+**Status:** partial, Abschluss aktuell nicht erreicht.
+
+**Ziel:** Der bestehende Importpfad soll in der GUI fuer Einzelupload, Statussichtbarkeit und nachvollziehbare Fehler-/Duplicate-Rueckmeldung produktiv nutzbar sein.
+
+### Nachweisbar implementiert
+
+- Upload-Formular in der Dokumentansicht
+- asynchroner Upload ueber `POST /documents/import`
+- generisches Job-Polling ueber `GET /api/v1/jobs/{job_id}`
+- sichtbare Jobstatuslabels fuer `queued`, `running`, `completed`, `failed`
+- generische Erfolgs- und Fehlerdarstellung
+- Testabdeckung fuer `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, `PARSER_FAILED` und `OCR_REQUIRED`
+- Duplicate-Erkennung im Backend mit `import_status = duplicate`
+
+### Nicht konsistent abgeschlossen
+
+- kein dedizierter Duplicate-Zustand in der GUI
+- kein dedizierter OCR-Hinweis in der GUI
+- kein Direkt-Sprung in die Dokumentdetailansicht nach Erfolg
+- Upload laeuft weiterhin im Default-Workspace-/Default-User-Kontext statt im serverseitig aufgeloesten M4a-Kontext
+
+### Bekannte Einschraenkungen
+
+- nur Einzelupload
+- kein Byte-Fortschritt
+- Polling mit festem Intervall statt adaptiver Strategie
+- Frontend faellt weiter auf einen Default-Workspace im Query-Kontext zurueck
+
+### Abschlussentscheidung
+
+- Dokumentationspflicht: erfuellt
+- M4b nach Code- und Dokuabgleich: **nicht abgeschlossen**
+
+---
+
+## M4c - Dokument-Lifecycle
+
+**Status:** implemented.
+
+**Ziel:** Dokumente muessen zwischen aktivem Betrieb, Archivierung und Soft-Delete unterscheidbar sein, ohne historische Referenzen fuer Versionen, Chunks und Chat-Citations zu brechen.
+
+### Nachweisbar implementiert
+
+- Lifecycle-Werte `active`, `archived`, `deleted`
+- Lifecycle-Felder `lifecycle_status`, `archived_at`, `deleted_at`
+- `PATCH /documents/{document_id}/archive`
+- `PATCH /documents/{document_id}/restore`
+- `DELETE /documents/{document_id}` als Soft-Delete
+- Dokumentliste mit Defaultfilter auf `active`
+- Search/Retrieval nur fuer `active`
+- historische Chat-Citations bleiben fuer geloeschte Dokumente sichtbar
+
+### Bekannte Einschraenkungen
+
+- kein Restore fuer `deleted`
+- kein separater Purge-/Hard-Delete-Prozess
+- `lifecycle_status=deleted` ist als Querywert formal zulaessig, liefert aber fachlich keine sichtbaren Dokumente
+
+### Abschlussentscheidung
+
+- Dokumentationspflicht: erfuellt
+- M4c nach Code- und Dokuabgleich: **abgeschlossen**
 
 ---
 
@@ -668,28 +771,137 @@ Erlaubte Typen:
 
 ---
 
-## M4 - Chat mit Wissensbasisbezug
+## M4 - Produktisierung und Betriebsfaehigkeit
 
 **Status:** missing.
 
-**Ziel:** Auf der M3c-Grundlage einen voll integrierten Chat bereitstellen, der Fragen ueber Retrieval beantwortet, Quellenpflicht durchsetzt und allgemeine Antworten klar kennzeichnet.
+**Ziel:** Aus dem funktionalen lokalen Wissenssystem ein belastbares Produkt fuer den lokalen Betrieb machen. M4 fuehrt keine neue Intelligenz-Schicht ein, sondern haertet Betrieb, Qualitaet, Sicherheit, Isolation, Lifecycle und Dokumentation auf Basis der abgeschlossenen M3-Fundamente.
+
+### M4 Zielbild
+
+- Das System ist nicht nur funktional, sondern lokal belastbar betreibbar.
+- Benutzerzugriff, Workspace-Grenzen, Dokument-Lifecycle und Diagnosepfade sind explizit modelliert.
+- Upload, Chat und Retrieval sind ueber GUI und API konsistent in einen kontrollierten Produktfluss eingebettet.
+- Betriebssicht, Backup/Restore, Beobachtbarkeit und Performance sind fuer den lokalen Einsatz dokumentiert und nachweisbar.
+- M4 verbessert Robustheit, Sicherheit und Wartbarkeit, ohne neue agentische oder workflowgetriebene Produktlogik zu erzwingen.
+
+### Scope
+
+- Authentifizierung und klares Benutzerkonzept fuer lokalen Betrieb.
+- Workspace-Isolation ueber API, Persistenz und GUI.
+- Upload-GUI fuer den bestehenden Importpfad.
+- Dokument-Lifecycle mit sichtbaren Statusuebergaengen und kontrollierten Bedienpfaden.
+- Admin- und Diagnoseansicht fuer lokalen Systemzustand.
+- Observability fuer Backend, Jobs, Fehler und zentrale Betriebskennzahlen.
+- Backup/Restore fuer lokale Betriebs- und Wiederherstellungsfaehigkeit.
+- Performance-Haertung fuer die bereits vorhandenen Read-, Retrieval- und Chat-Pfade.
+- Deployment- und Betriebsdokumentation fuer reproduzierbaren lokalen Betrieb.
+
+### Nicht-Scope
+
+- Agenten.
+- automatische Aktionen.
+- komplexe Workflows.
+- Multi-User-Collaboration.
+- Enterprise-Rollenmodell.
+- externe Integrationen.
+- neue semantische oder agentische Intelligenz-Schichten.
 
 ### Tasks
 
-- Produktiven LLM Provider an den bestehenden Provider-Vertrag anbinden.
-- Provider-Konfiguration, Timeout-Handling und Betriebsfehler haerten.
-- Optional Streaming-Vertrag definieren.
-- Chat-Service um produktive Betriebsfaehigkeit erweitern, ohne die M3c-Quellenpflicht aufzuweichen.
-- Kennzeichnung fuer Antworten ausserhalb der Wissensbasis im API- und UI-Flow absichern.
-- Dokumentvergleich im Chat.
-- API- und Integrationsnachweise fuer den produktiven Antwortpfad.
+- Authentifizierung und Benutzerkonzept auf den bestehenden lokalen Produktfluss aufsetzen.
+- Workspace-Isolation in API, Datenmodell, Query-Pfaden und GUI hart absichern.
+- Upload-GUI fuer den bestehenden Dokumentimport bereitstellen.
+- Dokument-Lifecycle fuer Import, Lesbarkeit, Fehlerzustand, Archivierung oder Sichtbarkeit konsistent modellieren.
+- Admin- und Diagnoseansicht fuer Health, Fehler, Queue- oder Jobstatus und Betriebszustand bereitstellen.
+- Observability fuer Backend, Import, Retrieval und Chat standardisieren.
+- Backup/Restore fuer lokalen Betrieb definieren, dokumentieren und pruefen.
+- Performance-Haertung fuer Paket-5-, M3b- und M3c-Pfade mit messbaren Budgets abschliessen.
+- Deployment- und Betriebsdokumentation fuer lokale Zielumgebungen vervollstaendigen.
+
+### Abhaengigkeiten zu M3
+
+- M3a liefert die GUI-Grundstruktur, auf der Upload-, Admin- und Diagnoseansichten aufsetzen.
+- M3b liefert den Retrieval-Pfad, dessen Performance und Isolation in M4 gehaertet werden.
+- M3c liefert Chat-API, RAG-Orchestrierung und Fehlerstandard, die in M4 betrieblich abgesichert werden.
+- M4 setzt voraus, dass M3b und M3c funktional abgeschlossen oder nur noch in nicht-blockierenden Restpunkten offen sind.
+- M4 darf keine neuen fachlichen Antworten oder neue Intelligenzlogik erzwingen, sondern stabilisiert die vorhandenen M3-Faehigkeiten.
 
 ### Akzeptanzkriterien
 
-- Bei Dokumentbezug werden Quellen im echten Antwortpfad geliefert.
-- Ohne passende Quelle wird der Status transparent gekennzeichnet.
-- Vergleich mehrerer Dokumente ist moeglich.
-- Allgemeine Antworten sind klar als nicht aus der Wissensbasis gekennzeichnet.
+- Zugriff auf das lokale System ist ueber ein definiertes Benutzerkonzept abgesichert.
+- Workspaces sind in API, Datenhaltung und GUI wirksam voneinander isoliert.
+- Dokumente koennen ueber eine GUI hochgeladen und ueber ihren Lifecycle nachvollziehbar verfolgt werden.
+- Admin- und Diagnoseansicht machen den lokalen Systemzustand ohne Datenbankdirektzugriff sichtbar.
+- Zentrale Fehler, Health-Informationen und Betriebsmetriken sind beobachtbar.
+- Backup und dokumentierter Restore sind lokal erfolgreich pruefbar.
+- Read-, Retrieval- und Chat-Pfade halten definierte lokale Performancebudgets ein.
+- Deployment- und Betriebsdokumentation reicht aus, um das System reproduzierbar lokal bereitzustellen und wiederherzustellen.
+
+### Risiken
+
+- Authentifizierung wird zu schwergewichtig und zieht ein unnoetiges Enterprise-Modell nach sich.
+- Workspace-Isolation bleibt partiell und fuehrt zu Datenleckagen zwischen lokalen Bereichen.
+- Upload-GUI fuehrt neue Fehlerpfade ein, die den bestehenden stabilen Importpfad unterlaufen.
+- Observability bleibt zu schwach, sodass lokale Betriebsprobleme nur indirekt sichtbar werden.
+- Backup/Restore wird dokumentiert, aber nicht real getestet.
+- Performance-Haertung verschiebt sich auf spaeter und laesst produktionsnahe lokale Lastprobleme bestehen.
+- M4 verwischt die Grenze zu M5 und zieht wieder neue Fachlogik statt Produktisierung nach.
+
+### M4a - Authentifizierung und Workspace-Isolation
+
+**Status:** missing.
+
+**Ziel:** Jede API-Anfrage muss eindeutig einem Benutzer und einem autorisierten Workspace-Kontext zugeordnet sein.
+
+Kurzscope:
+
+- lokales Benutzerkonto
+- Login
+- Session-basierte Authentifizierung als Primärpfad
+- Workspace-Zugriffspruefung
+- API-Guards
+- Frontend Login Screen
+- Logout
+
+Nicht-Scope:
+
+- OAuth
+- SSO
+- Rollenmodell ueber Owner/Admin hinaus
+- externe Identity Provider
+
+Artefakt:
+
+- Detaildefinition in `docs/m4a-auth-workspace-isolation.md`
+
+### M4b - Upload-GUI
+
+**Status:** missing.
+
+**Ziel:** Dokumente koennen ueber die Web-GUI importiert werden.
+
+Kurzscope:
+
+- Datei auswaehlen
+- Upload starten
+- Importstatus anzeigen
+- Parserfehler anzeigen
+- Duplicate anzeigen
+- `OCR_REQUIRED` anzeigen
+- Dokumentdetail nach erfolgreichem Import oeffnen
+
+Nicht-Scope:
+
+- Drag-and-drop Mehrfachupload
+- Ordnerimport
+- Hintergrundjobs mit Queue
+- OCR-Ausfuehrung
+- externe Speicher
+
+Artefakt:
+
+- Detaildefinition in `docs/m4b-upload-gui.md`
 
 ---
 
@@ -720,28 +932,21 @@ Erlaubte Typen:
 
 ---
 
-## M6 - Backup, Restore-Doku und Betriebsgrundlage
+## M6 - Erweiterte Betriebsautomatisierung
 
 **Status:** missing.
 
-**Ziel:** Produktionsnaher Betrieb fuer PostgreSQL mit automatisiertem Backup und Healthcheck.
+**Ziel:** Weitergehende Betriebsautomatisierung nach der M4-Produktisierung, falls ueber den lokalen belastbaren Zielzustand hinaus weitere Automatisierung noetig wird.
 
 ### Tasks
 
-- Backup-Script fuer externen Speicher.
-- Backup-Konfiguration dokumentieren.
-- Manuellen Restore-Test dokumentieren.
-- DB-Healthcheck.
-- API-Healthcheck.
-- Fehlerlogging standardisieren.
-- Betriebsrunbook fuer 1h Wiederherstellungsziel.
+- weitergehende Automatisierung fuer Backups, Rotation und externe Speicher.
+- erweiterte Betriebs-Healthchecks und wiederkehrende Verifikation.
+- optionales Betriebsrunbook fuer erhoehte Wiederherstellungs- und Wartungsanforderungen.
 
 ### Akzeptanzkriterien
 
-- Backup laeuft automatisiert.
-- Restore ist manuell dokumentiert und einmal geprueft.
-- Healthcheck erkennt DB-Ausfall.
-- Betrieb ist ohne manuelle Ad-hoc-Schritte nachvollziehbar.
+- Zusaetzliche Betriebsautomatisierung geht ueber den in M4 erreichten lokalen Produktisierungsstand hinaus.
 
 ---
 
@@ -753,9 +958,9 @@ Erlaubte Typen:
 4. Offene M3a-Testluecken fuer finalen GUI-Abschluss schliessen.
 5. PostgreSQL-Integrationsnachweis fuer M3b-Suchtreffer, Filterung und Ranking ergaenzen.
 6. Ranking-Regressionstest fuer M3b einfuehren.
-7. Produktiven LLM Provider fuer M4 an den bestehenden Provider-Vertrag anbinden.
-8. Betriebsgrenzen fuer M4 definieren: Timeout, Retry, Logging, Provider-Konfiguration.
-9. M4 auf der verifizierten M3c-Grundlage starten.
+7. Benutzerkonzept und Workspace-Isolation fuer M4 fachlich und technisch festziehen.
+8. Upload-GUI, Diagnoseansicht, Observability sowie Backup/Restore fuer M4 spezifizieren und priorisieren.
+9. M4 auf der verifizierten M3-Grundlage als Produktisierungsphase starten.
 
 ---
 
@@ -783,5 +988,7 @@ Erlaubte Typen:
 - [M3b Retrieval Foundation](docs/m3b-retrieval-foundation.md)
 - [M3a GUI Implementierungsplan](docs/m3a-implementation-plan.md)
 - [M3a GUI ViewModels](docs/m3a-viewmodels.md)
+- [M4a Authentifizierung und Workspace-Isolation](docs/m4a-auth-workspace-isolation.md)
+- [M4b Upload-GUI](docs/m4b-upload-gui.md)
 - [Definition of Done: Paket 5](docs/paket-5-definition-of-done.md)
 - [ADR: Dokument-Read-API und Datenkonsistenz vor Retrieval](docs/adr/0003-document-read-api-before-retrieval.md)

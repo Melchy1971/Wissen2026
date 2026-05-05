@@ -11,6 +11,51 @@ export function mapImportStatus(status) {
   return lookup[status] || { kind: 'unknown', label: 'Unbekannt', tone: 'neutral' };
 }
 
+export function mapJobStatus(job) {
+  const status = job?.status || 'unknown';
+  const jobType = job?.job_type || 'background_job';
+
+  const lookup = {
+    queued: {
+      kind: 'queued',
+      label: 'In Warteschlange',
+      tone: 'warning',
+      message: jobType === 'search_index_rebuild' ? 'Rebuild wartet auf Ausfuehrung.' : 'Import wartet auf Ausfuehrung.',
+    },
+    running: {
+      kind: 'running',
+      label: 'Wird verarbeitet',
+      tone: 'info',
+      message: jobType === 'search_index_rebuild' ? 'Search-Index-Rebuild wird verarbeitet.' : 'Dokument wird verarbeitet.',
+    },
+    completed: {
+      kind: 'completed',
+      label: 'Abgeschlossen',
+      tone: 'success',
+      message: jobType === 'search_index_rebuild' ? 'Search-Index-Rebuild abgeschlossen.' : 'Import abgeschlossen.',
+    },
+    failed: {
+      kind: 'failed',
+      label: 'Fehlgeschlagen',
+      tone: 'danger',
+      message: jobType === 'search_index_rebuild' ? 'Search-Index-Rebuild fehlgeschlagen.' : 'Import fehlgeschlagen.',
+    },
+    cancelled: {
+      kind: 'cancelled',
+      label: 'Abgebrochen',
+      tone: 'neutral',
+      message: 'Job wurde abgebrochen.',
+    },
+  };
+
+  const fallback = { kind: 'unknown', label: 'Unbekannt', tone: 'neutral', message: 'Jobstatus unbekannt.' };
+  const mapped = lookup[status] || fallback;
+  return {
+    ...mapped,
+    message: job?.progress_message || mapped.message,
+  };
+}
+
 export function mapError(error) {
   return {
     code: error?.code || 'UNKNOWN_ERROR',
@@ -25,6 +70,8 @@ function mapErrorTitle(code) {
   const titles = {
     NETWORK_ERROR: 'API nicht erreichbar',
     SERVICE_UNAVAILABLE: 'Service nicht verfuegbar',
+    AUTH_REQUIRED: 'Admin-Authentifizierung erforderlich',
+    ADMIN_REQUIRED: 'Admin-Zugriff erforderlich',
     DOCUMENT_NOT_FOUND: 'Dokument nicht gefunden',
     CHAT_SESSION_NOT_FOUND: 'Chat-Sitzung nicht gefunden',
     DOCUMENT_STATE_CONFLICT: 'Dokumentzustand inkonsistent',

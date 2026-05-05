@@ -1,11 +1,11 @@
 # Datenmodell V1
 
-Dieses Dokument beschreibt den aktuellen Datenmodellstand nach Paket 5. Code und Migrationen sind die Ground Truth. Originaldateien werden nicht gespeichert; kanonische Textquelle ist `document_versions.normalized_markdown`.
+Dieses Dokument beschreibt den aktuellen Datenmodellstand nach Paket 5 und den dokumentierten M4-Stand. Code und Migrationen sind die Ground Truth. Originaldateien werden nicht gespeichert; kanonische Textquelle ist `document_versions.normalized_markdown`.
 
 ## Tabellenuebersicht
 
-- `workspaces`: Arbeitsbereich-Stammdaten mit Default-Workspace fuer V1.
-- `users`: vorbereitete User-Stammdaten mit Default-User, ohne Login-, Passwort- oder Sessiondaten.
+- `workspaces`: Arbeitsbereich-Stammdaten; derzeit ohne nachweisbar implementierte Membership-Isolation.
+- `users`: vorbereitete User-Stammdaten; derzeit ohne nachweisbar implementierte Login-, Passwort- oder Sessiondaten.
 - `documents`: Dokument-Metadaten, Workspace-/Owner-Zuordnung, aktueller Versionszeiger, Deduplizierungs-Hash und Importstatus.
 - `document_versions`: versionierter kanonischer Markdown-Inhalt und Parser-/OCR-/KI-Metadaten.
 - `document_chunks`: aus einer Dokumentversion abgeleitete Textabschnitte mit Quellenanker.
@@ -19,6 +19,28 @@ Dieses Dokument beschreibt den aktuellen Datenmodellstand nach Paket 5. Code und
 - `analysis_group_documents`: Dokumentauswahl fuer Analysegruppen.
 - `analysis_results`: vorbereitete Ergebnisse fuer Merge, Compare und Refine.
 - `analysis_result_sources`: optionale Quellenbezuege fuer Analyseergebnisse.
+
+## M4a Konsistenzstand im Datenmodell
+
+Nachweisbar vorhanden:
+
+- `workspaces`
+- `users`
+- `documents.workspace_id`
+- `documents.owner_user_id`
+- `chat_sessions.workspace_id`
+- `chat_sessions.owner_user_id`
+
+Nicht nachweisbar vorhanden:
+
+- `workspace_memberships`
+- `auth_sessions`
+- erweiterte `users`-Felder fuer `login` oder `password_hash`
+
+Folgerung:
+
+- Workspace-Bezug ist datenmodellseitig vorbereitet und in Dokument-, Chat- und Tag-Modellen sichtbar.
+- Eine echte M4a-Workspace-Isolation ueber Memberships und serverseitig aufgeloeste Benutzeridentitaet ist im vorliegenden Schema noch nicht abgeschlossen.
 
 ## Wichtigste Beziehungen
 
@@ -46,6 +68,9 @@ Wichtige Felder:
 | `mime_type` | erkannter MIME-Type |
 | `content_hash` | Hash des Quellinhalts fuer Deduplizierung |
 | `import_status` | expliziter Importzustand |
+| `lifecycle_status` | Dokument-Lifecycle: `active`, `archived`, `deleted` |
+| `archived_at` | Zeitpunkt der Archivierung |
+| `deleted_at` | Zeitpunkt des Soft-Delete |
 | `created_at` | Erstellzeitpunkt |
 | `updated_at` | Aktualisierungszeitpunkt |
 
@@ -54,6 +79,19 @@ Constraints:
 - Primaerschluessel auf `id`.
 - Unique Constraint `uq_documents_workspace_content_hash` auf `(workspace_id, content_hash)`.
 - Check Constraint `ck_documents_import_status_allowed` auf erlaubte Importstatuswerte.
+- Check Constraint `ck_documents_lifecycle_status_allowed` auf erlaubte Lifecycle-Werte.
+
+Erlaubte Lifecycle-Werte:
+
+- `active`
+- `archived`
+- `deleted`
+
+Soft-Delete-Modell:
+
+- `deleted` entfernt kein Dokument physisch aus `documents`.
+- Versionen und Chunks bleiben erhalten.
+- Der Lifecycle wird ueber Status und Timestamps modelliert, nicht ueber `DELETE CASCADE`.
 
 Erlaubte Importstatuswerte:
 
@@ -158,6 +196,12 @@ Verhalten:
 - Bei Insert-Konflikt wird der Konflikt abgefangen und das bestehende Dokument deterministisch zurueckgegeben.
 - Duplicate-Responses setzen `duplicate_status = duplicate_existing` und `import_status = duplicate`.
 
+## Bekannte Einschraenkungen fuer Auth und Workspace-Isolation
+
+- `owner_user_id` ist vorhanden, wird aber nicht ueber einen nachweisbaren Login-/Session-Flow aufgeloest.
+- `workspace_id` ist fachlich zentral, wird aber in mehreren API-Vertraegen weiterhin explizit vom Client transportiert.
+- Ohne `workspace_memberships` gibt es keine referenzielle Mitgliedschaftsabbildung fuer echte Workspace-Zugriffspruefung.
+
 ## Tag-Prinzip
 
 Kategorien und Tags sind getrennt modelliert. Tags sind pro Workspace ueber `normalized_name` eindeutig. `document_tags.source` ist kontrolliert auf `manual`, `ki` und `import`.
@@ -175,6 +219,7 @@ Chat-spezifische Regeln:
 - `chat_citations` enthaelt `message_id`, `chunk_id`, `document_id`, `source_anchor`.
 - Citations referenzieren `documents` und `document_chunks` referenziell konsistent.
 - Fuer zitierte Dokumente und Chunks ist Loeschen bewusst restriktiv modelliert, damit historische Chat-Quellen nicht still brechen.
+- Historische Citations bleiben auch dann lesbar, wenn das referenzierte Dokument spaeter `deleted` ist.
 - `POST /api/v1/chat/sessions/{session_id}/messages` speichert zuerst die User-Message und danach bei ausreichendem Kontext die Assistant-Message.
 - Assistant-Messages mit `basis_type = knowledge_base` muessen im erfolgreichen RAG-Pfad Citations mit `chunk_id` besitzen.
 - Insufficient-Context-, Retrieval- und LLM-Fehler speichern keine freie Assistant-Antwort.
@@ -198,6 +243,18 @@ Relevante Migrationen fuer das Dokumentmodell:
 - `20260504_0010_repair_legacy_document_states.py`: Reparatur und Auditierung inkonsistenter Legacy-Dokumente, Versionen und Chunks.
 - `20260504_0011_chunk_search_vector.py`: PostgreSQL-FTS-Spalte und `GIN`-Index fuer Retrieval.
 - `20260504_0012_chat_message_metadata_and_citations.py`: Ausrichtung von `chat_messages.metadata` und neue Tabelle `chat_citations`.
+- `20260505_0013_document_lifecycle.py`: Lifecycle-Felder, Constraint und Listenindex fuer `active|archived|deleted`.
+
+## M4c Lifecycle-Auswirkungen auf Retrieval und Chat
+
+- Search beruecksichtigt nur Dokumente mit `lifecycle_status = active`.
+- Archivierte Dokumente bleiben datenmodellseitig vollstaendig erhalten, fallen aber aus neuem Retrieval heraus.
+- Geloeschte Dokumente bleiben zur Wahrung historischer Referenzen vorhanden, sind aber fachlich unsichtbar.
+
+Bekannte Einschraenkungen:
+
+- Das Datenmodell enthaelt keinen separaten Purge-Status oder Hard-Delete-Prozess.
+- `deleted` ist terminal; eine Rueckkehr in `active` oder `archived` ist nicht modelliert.
 
 ## Performance- und Reparaturergaenzungen aus Paket 5
 

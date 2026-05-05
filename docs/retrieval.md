@@ -108,7 +108,15 @@ Damit werden ausgeschlossen:
 - Chunks alter, nicht aktueller Versionen.
 - Dokumente mit `pending`.
 - Dokumente mit `failed`.
+- Dokumente mit `archived`.
+- Dokumente mit `deleted`.
 - Dokumente ausserhalb des angefragten Workspaces.
+
+Lifecycle-Auswirkung:
+
+- Retrieval/Search arbeitet nur auf `documents.lifecycle_status = active`.
+- Archivierte Dokumente bleiben ueber die Dokumentliste erreichbar, verschwinden aber sofort aus neuen Search-Treffern.
+- Soft-geloeschte Dokumente bleiben historisch im Datenmodell, sind fuer Retrieval jedoch ausgeschlossen.
 
 ## Sortierlogik
 
@@ -158,6 +166,11 @@ Fehlerformat:
 - keine Antwortgenerierung
 - keine Zitatauswahl ueber den gelieferten `source_anchor` hinaus
 - keine Schreiboperationen
+
+## Bekannte Einschraenkungen
+
+- Retrieval kennt keinen historischen Modus fuer archivierte oder geloeschte Dokumente.
+- Bereits gespeicherte Chat-Citations koennen weiter auf Dokumente verweisen, die aus dem aktuellen Retrieval nicht mehr erreichbar sind.
 
 ## Tests
 

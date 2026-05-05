@@ -1,5 +1,6 @@
 import os
 from collections.abc import Iterator
+import logging
 
 import psycopg
 import pytest
@@ -11,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.v1 import search as search_api
 from app.core.config import settings
 from app.main import app
+from app.services.search_index_service import SearchIndexRebuildService
 from app.services.search_service import SearchService
 from tests.integration.test_migrations import make_alembic_config, psycopg_url
 
@@ -29,6 +31,7 @@ DOC_DB_ID       = "e2000000-0000-0000-0000-000000000003"
 DOC_FAILED_ID   = "e2000000-0000-0000-0000-000000000004"
 DOC_PENDING_ID  = "e2000000-0000-0000-0000-000000000005"
 DOC_OTHER_WS_ID = "e2000000-0000-0000-0000-000000000006"
+DOC_ARCHIVED_ID = "e2000000-0000-0000-0000-000000000007"
 DOC_RANK_STRONG_ID = "e2100000-0000-0000-0000-000000000001"
 DOC_RANK_NEW_ID    = "e2100000-0000-0000-0000-000000000002"
 DOC_RANK_OLD_ID    = "e2100000-0000-0000-0000-000000000003"
@@ -43,6 +46,7 @@ VER_DB_ID         = "e3000000-0000-0000-0000-000000000004"
 VER_FAILED_ID     = "e3000000-0000-0000-0000-000000000005"
 VER_PENDING_ID    = "e3000000-0000-0000-0000-000000000006"
 VER_OTHER_WS_ID   = "e3000000-0000-0000-0000-000000000007"
+VER_ARCHIVED_ID   = "e3000000-0000-0000-0000-000000000008"
 VER_RANK_STRONG_ID = "e3100000-0000-0000-0000-000000000001"
 VER_RANK_NEW_ID    = "e3100000-0000-0000-0000-000000000002"
 VER_RANK_OLD_ID    = "e3100000-0000-0000-0000-000000000003"
@@ -57,6 +61,7 @@ CHUNK_DB_ID         = "e4000000-0000-0000-0000-000000000004"
 CHUNK_FAILED_ID     = "e4000000-0000-0000-0000-000000000005"
 CHUNK_PENDING_ID    = "e4000000-0000-0000-0000-000000000006"
 CHUNK_OTHER_WS_ID   = "e4000000-0000-0000-0000-000000000007"
+CHUNK_ARCHIVED_ID   = "e4000000-0000-0000-0000-000000000008"
 CHUNK_RANK_STRONG_ID = "e4100000-0000-0000-0000-000000000001"
 CHUNK_RANK_NEW_ID    = "e4100000-0000-0000-0000-000000000002"
 CHUNK_RANK_OLD_ID    = "e4100000-0000-0000-0000-000000000003"
@@ -77,6 +82,16 @@ def _sa_url(database_url: str) -> str:
     if database_url.startswith("postgresql://"):
         return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     return database_url
+
+
+def _index_exists(conn: psycopg.Connection, index_name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND indexname = %s)",
+            (index_name,),
+        )
+        row = cur.fetchone()
+    return bool(row[0]) if row is not None else False
 
 
 _NULL_SOURCE_ANCHOR = (
@@ -117,6 +132,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (DOC_FAILED_ID,   WORKSPACE_ID, USER_ID, "Failed Doc",     "hash-m3b-failed"),
                 (DOC_PENDING_ID,  WORKSPACE_ID, USER_ID, "Pending Doc",    "hash-m3b-pending"),
                 (DOC_OTHER_WS_ID, OTHER_WS_ID,  USER_ID, "Other WS Doc",   "hash-m3b-other-ws"),
+                (DOC_ARCHIVED_ID, WORKSPACE_ID, USER_ID, "Archived Doc",   "hash-m3b-archived"),
             ],
         )
         cur.executemany(
@@ -206,6 +222,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (VER_FAILED_ID,     DOC_FAILED_ID,   1, "# Failed",            "md-hash-failed"),
                 (VER_PENDING_ID,    DOC_PENDING_ID,  1, "# Pending",           "md-hash-pending"),
                 (VER_OTHER_WS_ID,   DOC_OTHER_WS_ID, 1, "# Other WS",         "md-hash-other-ws"),
+                (VER_ARCHIVED_ID,   DOC_ARCHIVED_ID, 1, "# Archived",         "md-hash-archived"),
             ],
         )
         cur.executemany(
@@ -237,6 +254,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (VER_FAILED_ID,   DOC_FAILED_ID),
                 (VER_PENDING_ID,  DOC_PENDING_ID),
                 (VER_OTHER_WS_ID, DOC_OTHER_WS_ID),
+                (VER_ARCHIVED_ID, DOC_ARCHIVED_ID),
                 (VER_RANK_STRONG_ID, DOC_RANK_STRONG_ID),
                 (VER_RANK_NEW_ID, DOC_RANK_NEW_ID),
                 (VER_RANK_OLD_ID, DOC_RANK_OLD_ID),
@@ -256,6 +274,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 ("failed",  DOC_FAILED_ID),
                 ("pending", DOC_PENDING_ID),
                 ("chunked", DOC_OTHER_WS_ID),
+                ("chunked", DOC_ARCHIVED_ID),
                 ("chunked", DOC_RANK_STRONG_ID),
                 ("chunked", DOC_RANK_NEW_ID),
                 ("chunked", DOC_RANK_OLD_ID),
@@ -306,6 +325,10 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (CHUNK_OTHER_WS_ID,   DOC_OTHER_WS_ID, VER_OTHER_WS_ID,   0,
                  "anchor-other",  "exclusiveterm belongs to a completely different workspace context",
                  "exclusiveterm belongs to a completely different workspace context", _NULL_SOURCE_ANCHOR),
+                # Archived document: excluded by lifecycle filter
+                (CHUNK_ARCHIVED_ID,   DOC_ARCHIVED_ID, VER_ARCHIVED_ID,   0,
+                 "anchor-archived",  "archivedcontent archived knowledge should not be retrieved",
+                 "archivedcontent archived knowledge should not be retrieved", _NULL_SOURCE_ANCHOR),
                 # Ranking regression data:
                 # - strong chunk wins by rank because both query terms repeat.
                 # - all following chunks have identical content and rank.
@@ -328,6 +351,11 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (CHUNK_RANK_ID_HIGH, DOC_RANK_ID_HIGH, VER_RANK_ID_HIGH, 0,
                  "anchor-rank-id-high", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
             ],
+        )
+
+        cur.execute(
+            "UPDATE documents SET lifecycle_status = 'archived', archived_at = now() WHERE id = %s::uuid",
+            (DOC_ARCHIVED_ID,),
         )
 
     conn.commit()
@@ -466,6 +494,7 @@ def test_search_chunks_http_contract_filters_to_current_readable_workspace_chunk
     assert CHUNK_FAILED_ID not in chunk_ids
     assert CHUNK_PENDING_ID not in chunk_ids
     assert CHUNK_OTHER_WS_ID not in chunk_ids
+    assert CHUNK_ARCHIVED_ID not in chunk_ids
     assert document_ids <= {DOC_PYTHON_ID, DOC_ML_ID, DOC_DB_ID}
 
     for result in results:
@@ -523,6 +552,16 @@ def test_search_excludes_pending_documents(client: TestClient) -> None:
     assert response.json() == []
 
 
+def test_search_excludes_archived_documents(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/search/chunks",
+        params={"workspace_id": WORKSPACE_ID, "q": "archivedcontent"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_search_excludes_other_workspace_chunks(client: TestClient) -> None:
     # "exclusiveterm" only exists in OTHER_WS_ID; querying WORKSPACE_ID returns nothing
     response = client.get(
@@ -561,3 +600,43 @@ def test_search_current_python_chunk_found_not_old_version(client: TestClient) -
     chunk_ids = [r["chunk_id"] for r in results]
     assert CHUNK_PYTHON_ID in chunk_ids
     assert CHUNK_PYTHON_OLD_ID not in chunk_ids
+
+
+def test_search_index_rebuild_recreates_missing_index_and_search_still_returns_results(
+    client: TestClient,
+    pg_engine,
+    test_db_url: str,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with psycopg.connect(psycopg_url(test_db_url)) as conn:
+        with conn.cursor() as cur:
+            cur.execute("DROP INDEX IF EXISTS ix_document_chunks_search_vector")
+        conn.commit()
+        assert _index_exists(conn, "ix_document_chunks_search_vector") is False
+
+    with Session(pg_engine) as session:
+        with caplog.at_level(logging.INFO, logger="app.services.search_index_service"):
+            result = SearchIndexRebuildService.from_session(session).rebuild_search_index(workspace_id=WORKSPACE_ID)
+
+    assert result == {
+        "workspace_id": WORKSPACE_ID,
+        "reindexed_chunk_count": 13,
+        "reindexed_document_count": 11,
+        "index_name": "ix_document_chunks_search_vector",
+        "index_action": "created",
+        "status": "completed",
+    }
+
+    with psycopg.connect(psycopg_url(test_db_url)) as conn:
+        assert _index_exists(conn, "ix_document_chunks_search_vector") is True
+
+    response = client.get(
+        "/api/v1/search/chunks",
+        params={"workspace_id": WORKSPACE_ID, "q": "programming"},
+    )
+
+    assert response.status_code == 200
+    chunk_ids = [row["chunk_id"] for row in response.json()]
+    assert CHUNK_PYTHON_ID in chunk_ids
+    assert CHUNK_ARCHIVED_ID not in chunk_ids
+    assert "programming language used for software development" not in caplog.text

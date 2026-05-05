@@ -24,6 +24,18 @@ class WorkspaceRequiredApiError(ApiError):
     message = "workspace_id is required"
 
 
+class AuthRequiredApiError(ApiError):
+    status_code = 401
+    code = "AUTH_REQUIRED"
+    message = "Authentication required"
+
+
+class AdminRequiredApiError(ApiError):
+    status_code = 403
+    code = "ADMIN_REQUIRED"
+    message = "Admin access required"
+
+
 class InvalidPaginationApiError(ApiError):
     status_code = 422
     code = "INVALID_PAGINATION"
@@ -78,6 +90,12 @@ class DocumentStateConflictApiError(ApiError):
     message = "Document state is inconsistent"
 
 
+class InvalidLifecycleStatusApiError(ApiError):
+    status_code = 422
+    code = "INVALID_LIFECYCLE_STATUS"
+    message = "Invalid lifecycle status"
+
+
 class DuplicateDocumentApiError(ApiError):
     status_code = 409
     code = "DUPLICATE_DOCUMENT"
@@ -88,6 +106,12 @@ class UnsupportedFileTypeApiError(ApiError):
     status_code = 415
     code = "UNSUPPORTED_FILE_TYPE"
     message = "Unsupported file type"
+
+
+class FileTooLargeApiError(ApiError):
+    status_code = 413
+    code = "FILE_TOO_LARGE"
+    message = "Uploaded file exceeds the configured maximum size"
 
 
 class OcrRequiredApiError(ApiError):
@@ -102,7 +126,19 @@ class ParserFailedApiError(ApiError):
     message = "Document parser failed"
 
 
+class ImportFailedApiError(ApiError):
+    status_code = 500
+    code = "IMPORT_FAILED"
+    message = "Document import failed"
+
+
 class ServiceUnavailableApiError(ApiError):
     status_code = 503
     code = "SERVICE_UNAVAILABLE"
     message = "Service unavailable"
+
+
+class BackgroundJobNotFoundApiError(ApiError):
+    status_code = 404
+    code = "JOB_NOT_FOUND"
+    message = "Background job not found"

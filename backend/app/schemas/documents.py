@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 ImportStatus = Literal["pending", "parsing", "parsed", "chunked", "failed", "duplicate"]
+LifecycleStatus = Literal["active", "archived", "deleted"]
 
 
 class DocumentListItem(BaseModel):
@@ -17,6 +18,9 @@ class DocumentListItem(BaseModel):
     updated_at: datetime
     latest_version_id: str | None
     import_status: ImportStatus
+    lifecycle_status: LifecycleStatus
+    archived_at: datetime | None
+    deleted_at: datetime | None
     version_count: int
     chunk_count: int
 
@@ -65,7 +69,19 @@ class DocumentDetail(BaseModel):
     latest_version: DocumentVersionSummary | None
     parser_metadata: DocumentParserMetadata | None
     import_status: ImportStatus
+    lifecycle_status: LifecycleStatus
+    archived_at: datetime | None
+    deleted_at: datetime | None
     chunk_summary: DocumentChunkSummary
+
+
+class DocumentLifecycleResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    document_id: str
+    lifecycle_status: LifecycleStatus
+    archived_at: datetime | None
+    deleted_at: datetime | None
 
 
 class DocumentChunkSourceAnchor(BaseModel):

@@ -38,12 +38,13 @@ def test_txt_import_persists_document_version_chunks_and_duplicate_status(
 
         assert response.status_code == 200
         payload = response.json()
-        assert payload["title"] == "notes"
-        assert payload["chunk_count"] == 1
-        assert payload["duplicate_status"] == "created"
-        assert payload["import_status"] == "chunked"
         assert payload["document_id"]
         assert payload["version_id"]
+        assert payload["chunk_count"] == 1
+        assert payload["import_status"] == "chunked"
+        assert payload["duplicate_of_document_id"] is None
+        assert payload["parser_type"] == "txt-parser"
+        assert payload["warnings"] == []
 
         with psycopg.connect(psycopg_url(test_database_url)) as connection:
             with connection.cursor() as cursor:
@@ -71,8 +72,10 @@ def test_txt_import_persists_document_version_chunks_and_duplicate_status(
         assert duplicate_payload["document_id"] == payload["document_id"]
         assert duplicate_payload["version_id"] == payload["version_id"]
         assert duplicate_payload["chunk_count"] == 1
-        assert duplicate_payload["duplicate_status"] == "duplicate_existing"
         assert duplicate_payload["import_status"] == "duplicate"
+        assert duplicate_payload["duplicate_of_document_id"] == payload["document_id"]
+        assert duplicate_payload["parser_type"] == "txt-parser"
+        assert duplicate_payload["warnings"] == []
     finally:
         command.downgrade(config, "base")
 
@@ -163,10 +166,8 @@ def test_parallel_duplicate_imports_create_single_document(test_database_url, mo
 
         assert {payload["document_id"] for payload in payloads}
         assert len({payload["document_id"] for payload in payloads}) == 1
-        assert sorted(payload["duplicate_status"] for payload in payloads) == [
-            "created",
-            "duplicate_existing",
-        ]
+        assert sum(1 for payload in payloads if payload["duplicate_of_document_id"] is None) == 1
+        assert sum(1 for payload in payloads if payload["duplicate_of_document_id"] == payload["document_id"]) == 1
 
         with psycopg.connect(psycopg_url(test_database_url)) as connection:
             with connection.cursor() as cursor:

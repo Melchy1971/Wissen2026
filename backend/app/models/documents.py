@@ -17,6 +17,10 @@ class Document(Base):
             "import_status in ('pending', 'parsing', 'parsed', 'chunked', 'failed', 'duplicate')",
             name="ck_documents_import_status_allowed",
         ),
+        CheckConstraint(
+            "lifecycle_status in ('active', 'archived', 'deleted')",
+            name="ck_documents_lifecycle_status_allowed",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -32,6 +36,9 @@ class Document(Base):
     mime_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     import_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="pending")
+    lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="active")
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -121,3 +128,37 @@ class ChatCitation(Base):
     chunk_id: Mapped[str] = mapped_column(String, ForeignKey("document_chunks.id", ondelete="RESTRICT"), nullable=False)
     document_id: Mapped[str] = mapped_column(String, ForeignKey("documents.id", ondelete="RESTRICT"), nullable=False)
     source_anchor: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class BackgroundJob(Base):
+    __tablename__ = "background_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "job_type in ('document_import', 'search_index_rebuild')",
+            name="ck_background_jobs_job_type_allowed",
+        ),
+        CheckConstraint(
+            "status in ('queued', 'running', 'completed', 'failed', 'cancelled')",
+            name="ck_background_jobs_status_allowed",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_background_jobs_attempt_count_non_negative"),
+    )
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    job_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    workspace_id: Mapped[str] = mapped_column(String, nullable=False)
+    requested_by_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    payload_: Mapped[dict] = mapped_column("payload", JSON, nullable=False, default=dict)
+    result_: Mapped[dict | None] = mapped_column("result", JSON, nullable=True)
+    progress_current: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progress_total: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    progress_message: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    locked_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

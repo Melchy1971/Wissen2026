@@ -33,6 +33,7 @@ export function AppShell() {
           <div className="shell__nav">
             <NavLink to="/documents">Dokumente</NavLink>
             <NavLink to="/chat">Chat</NavLink>
+            <NavLink to="/admin/diagnostics">Admin</NavLink>
           </div>
         </nav>
       </header>

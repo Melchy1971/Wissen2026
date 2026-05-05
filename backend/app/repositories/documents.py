@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from app.models.documents import Chunk, Document, DocumentVersion
 
 
+VISIBLE_DOCUMENT_STATUSES = ("active", "archived")
+
+
 @dataclass(frozen=True)
 class DocumentListRecord:
     id: str
@@ -18,6 +21,9 @@ class DocumentListRecord:
     updated_at: datetime
     latest_version_id: str | None
     import_status: str
+    lifecycle_status: str
+    archived_at: datetime | None
+    deleted_at: datetime | None
     version_count: int
     chunk_count: int
 
@@ -35,6 +41,9 @@ class DocumentDetailRecord:
     updated_at: datetime
     latest_version_id: str | None
     import_status: str
+    lifecycle_status: str
+    archived_at: datetime | None
+    deleted_at: datetime | None
     version_id: str | None
     version_number: int | None
     version_created_at: datetime | None
@@ -77,7 +86,15 @@ class DocumentRepository:
             return cast(value, postgresql.UUID(as_uuid=False))
         return value
 
-    def get_documents(self, *, workspace_id: str, limit: int, offset: int) -> list[DocumentListRecord]:
+    def get_documents(
+        self,
+        *,
+        workspace_id: str,
+        limit: int,
+        offset: int,
+        lifecycle_status: str | None = None,
+        include_archived: bool = False,
+    ) -> list[DocumentListRecord]:
         # Correlated scalar subqueries run only for the LIMIT-d rows, not the entire table.
         # With indexes on document_versions(document_id) and
         # document_chunks(document_id, document_version_id, chunk_index), each subquery
@@ -98,6 +115,15 @@ class DocumentRepository:
             .scalar_subquery()
         )
 
+        conditions = [
+            Document.workspace_id == self._uuid_param(workspace_id),
+            Document.lifecycle_status != "deleted",
+        ]
+        if lifecycle_status is not None:
+            conditions.append(Document.lifecycle_status == lifecycle_status)
+        elif not include_archived:
+            conditions.append(Document.lifecycle_status == "active")
+
         rows = self._session.execute(
             select(
                 Document.id,
@@ -107,10 +133,13 @@ class DocumentRepository:
                 Document.updated_at,
                 Document.current_version_id.label("latest_version_id"),
                 Document.import_status,
+                Document.lifecycle_status,
+                Document.archived_at,
+                Document.deleted_at,
                 func.coalesce(version_count_sq, 0).label("version_count"),
                 func.coalesce(chunk_count_sq, 0).label("chunk_count"),
             )
-            .where(Document.workspace_id == self._uuid_param(workspace_id))
+            .where(*conditions)
             .order_by(desc(Document.created_at))
             .limit(limit)
             .offset(offset)
@@ -125,6 +154,9 @@ class DocumentRepository:
                 updated_at=row.updated_at,
                 latest_version_id=row.latest_version_id,
                 import_status=row.import_status,
+                lifecycle_status=row.lifecycle_status,
+                archived_at=row.archived_at,
+                deleted_at=row.deleted_at,
                 version_count=row.version_count,
                 chunk_count=row.chunk_count,
             )
@@ -170,6 +202,9 @@ class DocumentRepository:
                 Document.updated_at,
                 Document.current_version_id.label("latest_version_id"),
                 Document.import_status,
+                Document.lifecycle_status,
+                Document.archived_at,
+                Document.deleted_at,
                 DocumentVersion.id.label("version_id"),
                 DocumentVersion.version_number,
                 DocumentVersion.created_at.label("version_created_at"),
@@ -185,7 +220,7 @@ class DocumentRepository:
                 last_chunk_id.label("last_chunk_id"),
             )
             .outerjoin(DocumentVersion, Document.current_version_id == DocumentVersion.id)
-            .where(Document.id == self._uuid_param(document_id))
+            .where(Document.id == self._uuid_param(document_id), Document.lifecycle_status != "deleted")
         ).one_or_none()
 
         if row is None:
@@ -203,6 +238,9 @@ class DocumentRepository:
             updated_at=row.updated_at,
             latest_version_id=row.latest_version_id,
             import_status=row.import_status,
+            lifecycle_status=row.lifecycle_status,
+            archived_at=row.archived_at,
+            deleted_at=row.deleted_at,
             version_id=row.version_id,
             version_number=row.version_number,
             version_created_at=row.version_created_at,
@@ -226,7 +264,9 @@ class DocumentRepository:
                 DocumentVersion.created_at,
                 DocumentVersion.markdown_hash.label("content_hash"),
             )
+            .join(Document, Document.id == DocumentVersion.document_id)
             .where(DocumentVersion.document_id == self._uuid_param(document_id))
+            .where(Document.lifecycle_status != "deleted")
             .order_by(desc(DocumentVersion.created_at), desc(DocumentVersion.version_number))
         ).all()
 
@@ -242,7 +282,10 @@ class DocumentRepository:
 
     def get_latest_version_id(self, document_id: str) -> str | None:
         return self._session.execute(
-            select(Document.current_version_id).where(Document.id == self._uuid_param(document_id))
+            select(Document.current_version_id).where(
+                Document.id == self._uuid_param(document_id),
+                Document.lifecycle_status != "deleted",
+            )
         ).scalar_one_or_none()
 
     def get_chunks(self, *, document_id: str, version_id: str, limit: int | None = None) -> list[DocumentChunkRecord]:
@@ -275,6 +318,22 @@ class DocumentRepository:
             )
             for row in rows
         ]
+
+    def document_exists(self, document_id: str) -> bool:
+        return (
+            self._session.execute(
+                select(Document.id).where(
+                    Document.id == self._uuid_param(document_id),
+                    Document.lifecycle_status != "deleted",
+                )
+            ).scalar_one_or_none()
+            is not None
+        )
+
+    def get_document_lifecycle(self, document_id: str) -> Document | None:
+        return self._session.execute(
+            select(Document).where(Document.id == self._uuid_param(document_id), Document.lifecycle_status != "deleted")
+        ).scalar_one_or_none()
 
     def document_exists(self, document_id: str) -> bool:
         return (

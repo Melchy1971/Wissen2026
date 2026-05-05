@@ -38,3 +38,13 @@ export function searchChunks({ workspaceId, query, limit = 20, offset = 0 }) {
 
   return requestJson(`/api/v1/search/chunks?${search.toString()}`);
 }
+
+export function importDocument(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return requestJson('/documents/import', {
+    method: 'POST',
+    body: formData,
+  });
+}

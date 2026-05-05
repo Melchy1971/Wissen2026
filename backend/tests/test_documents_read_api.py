@@ -29,6 +29,9 @@ def test_get_documents_lists_workspace_documents_sorted_by_created_at(
         "updated_at": "2026-05-01T11:00:00",
         "latest_version_id": document_fixture["version_id"],
         "import_status": "chunked",
+        "lifecycle_status": "active",
+        "archived_at": None,
+        "deleted_at": None,
         "version_count": 1,
         "chunk_count": 2,
     }
@@ -61,6 +64,9 @@ def test_get_document_returns_metadata_and_latest_version(
     assert payload["id"] == document_fixture["document_id"]
     assert payload["title"] == "Current Document"
     assert payload["import_status"] == "chunked"
+    assert payload["lifecycle_status"] == "active"
+    assert payload["archived_at"] is None
+    assert payload["deleted_at"] is None
     assert payload["latest_version_id"] == document_fixture["version_id"]
     assert payload["latest_version"] == {
         "id": document_fixture["version_id"],
@@ -97,6 +103,124 @@ def test_get_document_returns_404_for_missing_document(
             "details": {"document_id": "00000000-0000-0000-0000-999999999999"},
         }
     }
+
+
+def test_get_documents_excludes_archived_by_default_and_shows_with_filter(
+    client: TestClient,
+    db_session: Session,
+    document_fixture: dict[str, str],
+) -> None:
+    archived_id = "00000000-0000-0000-0000-000000000405"
+    archived_time = datetime(2026, 5, 2, 10, 0, tzinfo=UTC)
+    db_session.add(
+        Document(
+            id=archived_id,
+            workspace_id=document_fixture["workspace_id"],
+            owner_user_id=DEFAULT_USER_ID,
+            current_version_id=None,
+            title="Archived Doc",
+            source_type="upload",
+            mime_type="text/plain",
+            content_hash="archived-doc",
+            import_status="chunked",
+            lifecycle_status="archived",
+            archived_at=archived_time,
+            deleted_at=None,
+            created_at=archived_time,
+            updated_at=archived_time,
+        )
+    )
+    db_session.commit()
+
+    response_default = client.get(f"/documents?workspace_id={document_fixture['workspace_id']}")
+    response_filtered = client.get(
+        f"/documents?workspace_id={document_fixture['workspace_id']}&lifecycle_status=archived"
+    )
+
+    assert response_default.status_code == 200
+    assert archived_id not in [document["id"] for document in response_default.json()]
+    assert response_filtered.status_code == 200
+    assert [document["id"] for document in response_filtered.json()] == [archived_id]
+
+
+def test_deleted_document_is_not_retrievable(
+    client: TestClient,
+    db_session: Session,
+    document_fixture: dict[str, str],
+) -> None:
+    deleted_id = "00000000-0000-0000-0000-000000000406"
+    deleted_time = datetime(2026, 5, 2, 11, 0, tzinfo=UTC)
+    db_session.add(
+        Document(
+            id=deleted_id,
+            workspace_id=document_fixture["workspace_id"],
+            owner_user_id=DEFAULT_USER_ID,
+            current_version_id=None,
+            title="Deleted Doc",
+            source_type="upload",
+            mime_type="text/plain",
+            content_hash="deleted-doc",
+            import_status="chunked",
+            lifecycle_status="deleted",
+            archived_at=None,
+            deleted_at=deleted_time,
+            created_at=deleted_time,
+            updated_at=deleted_time,
+        )
+    )
+    db_session.commit()
+
+    response = client.get(f"/documents/{deleted_id}")
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "DOCUMENT_NOT_FOUND"
+
+
+def test_archive_document_updates_lifecycle_status(
+    client: TestClient,
+    document_fixture: dict[str, str],
+) -> None:
+    response = client.patch(f"/documents/{document_fixture['document_id']}/archive")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["document_id"] == document_fixture["document_id"]
+    assert payload["lifecycle_status"] == "archived"
+    assert payload["archived_at"] is not None
+    assert payload["deleted_at"] is None
+
+
+def test_restore_document_moves_archived_document_back_to_active(
+    client: TestClient,
+    document_fixture: dict[str, str],
+) -> None:
+    archive_response = client.patch(f"/documents/{document_fixture['document_id']}/archive")
+    assert archive_response.status_code == 200
+
+    response = client.patch(f"/documents/{document_fixture['document_id']}/restore")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["document_id"] == document_fixture["document_id"]
+    assert payload["lifecycle_status"] == "active"
+    assert payload["archived_at"] is None
+    assert payload["deleted_at"] is None
+
+
+def test_delete_document_soft_deletes_document(
+    client: TestClient,
+    document_fixture: dict[str, str],
+) -> None:
+    response = client.delete(f"/documents/{document_fixture['document_id']}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["document_id"] == document_fixture["document_id"]
+    assert payload["lifecycle_status"] == "deleted"
+    assert payload["deleted_at"] is not None
+
+    get_response = client.get(f"/documents/{document_fixture['document_id']}")
+    assert get_response.status_code == 404
 
 
 def test_get_document_returns_409_when_document_has_no_version(

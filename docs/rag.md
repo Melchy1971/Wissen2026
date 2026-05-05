@@ -43,6 +43,19 @@ Der erfolgreiche M3c-Flow:
 - Eine Assistant-Antwort ohne Chunk-Referenz wird als `INSUFFICIENT_CONTEXT` verworfen.
 - Insufficient-Context-Faelle erzeugen keine freie Assistant-Antwort und rufen keinen LLM Provider auf.
 
+## Lifecycle-Auswirkungen auf RAG
+
+- Neues Retrieval fuer Chat nutzt nur aktive Dokumente.
+- Archivierte Dokumente liefern keine neuen Retrieval-Treffer mehr.
+- Soft-geloeschte Dokumente liefern ebenfalls keine neuen Retrieval-Treffer mehr.
+- Bereits gespeicherte Chat-Citations bleiben historisch sichtbar, auch wenn das referenzierte Dokument spaeter geloescht wurde.
+
+Citation-Historie:
+
+- `chat_citations` bleibt append-only Teil des Chatverlaufs.
+- Die API filtert historische Citations fuer geloeschte Dokumente nicht nachtraeglich weg.
+- Dadurch bleibt die Nachvollziehbarkeit alter Antworten erhalten, auch wenn das aktuelle Dokument nicht mehr ueber Read-API oder Search erreichbar ist.
+
 ## Fehlerverhalten
 
 Alle Fehler verwenden das API-Error-Envelope.
@@ -80,3 +93,7 @@ Alle Fehler verwenden das API-Error-Envelope.
 - M3c liefert Foundation, stabilen API-Pfad, Fake-LLM-Testbarkeit und Quellenpflicht.
 - M4 ersetzt den Fake-/unconfigured Provider durch einen produktiven LLM Provider und erweitert den Chat fachlich.
 - Streaming, Agenten, Tool Use, Dokumentmutation, Embeddings und Analysefunktionen bleiben ausserhalb von M3c.
+
+Bekannte Einschraenkung aus M4c:
+
+- Historische Citations koennen auf Dokumente zeigen, die inzwischen archiviert oder geloescht wurden; das ist beabsichtigt und kein Datenfehler.

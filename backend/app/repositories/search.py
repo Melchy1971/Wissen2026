@@ -74,6 +74,7 @@ class SearchRepository:
                 Document.workspace_id == self._uuid_param(workspace_id),
                 Document.current_version_id == DocumentVersion.id,
                 Document.import_status.in_(READABLE_IMPORT_STATUSES),
+                Document.lifecycle_status == "active",
                 Chunk.search_vector.op("@@")(ts_query),
             )
             .order_by(

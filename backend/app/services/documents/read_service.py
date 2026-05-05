@@ -27,7 +27,15 @@ class DocumentStateConflictError(RuntimeError):
 
 
 class DocumentReadRepository(Protocol):
-    def get_documents(self, *, workspace_id: str, limit: int, offset: int) -> list[DocumentListRecord]: ...
+    def get_documents(
+        self,
+        *,
+        workspace_id: str,
+        limit: int,
+        offset: int,
+        lifecycle_status: str | None = None,
+        include_archived: bool = False,
+    ) -> list[DocumentListRecord]: ...
 
     def get_document_detail(self, document_id: str) -> DocumentDetailRecord | None: ...
 
@@ -48,7 +56,15 @@ class DocumentReadService:
     def from_session(cls, session) -> "DocumentReadService":
         return cls(DocumentRepository(session))
 
-    def get_documents(self, *, workspace_id: str, limit: int, offset: int) -> list[DocumentListItem]:
+    def get_documents(
+        self,
+        *,
+        workspace_id: str,
+        limit: int,
+        offset: int,
+        lifecycle_status: str | None = None,
+        include_archived: bool = False,
+    ) -> list[DocumentListItem]:
         return [
             DocumentListItem(
                 id=record.id,
@@ -58,10 +74,19 @@ class DocumentReadService:
                 updated_at=record.updated_at,
                 latest_version_id=record.latest_version_id,
                 import_status=record.import_status,
+                lifecycle_status=record.lifecycle_status,
+                archived_at=record.archived_at,
+                deleted_at=record.deleted_at,
                 version_count=record.version_count,
                 chunk_count=record.chunk_count,
             )
-            for record in self._repository.get_documents(workspace_id=workspace_id, limit=limit, offset=offset)
+            for record in self._repository.get_documents(
+                workspace_id=workspace_id,
+                limit=limit,
+                offset=offset,
+                lifecycle_status=lifecycle_status,
+                include_archived=include_archived,
+            )
         ]
 
     def get_document_detail(self, document_id: str) -> DocumentDetail:
@@ -111,6 +136,9 @@ class DocumentReadService:
                 metadata=record.version_metadata or {},
             ),
             import_status=record.import_status,
+            lifecycle_status=record.lifecycle_status,
+            archived_at=record.archived_at,
+            deleted_at=record.deleted_at,
             chunk_summary=DocumentChunkSummary(
                 chunk_count=record.chunk_count,
                 total_chars=record.total_chars,
@@ -134,6 +162,9 @@ class DocumentReadService:
             latest_version=None,
             parser_metadata=None,
             import_status=record.import_status,
+            lifecycle_status=record.lifecycle_status,
+            archived_at=record.archived_at,
+            deleted_at=record.deleted_at,
             chunk_summary=DocumentChunkSummary(
                 chunk_count=0,
                 total_chars=0,

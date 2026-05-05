@@ -2,6 +2,67 @@
 
 Stand: 2026-05-05
 
+## 2026-05-05 - M4c Dokumentationssync und Konsistenzpruefung
+
+### Changed
+
+- `docs/status.md`, `docs/api.md`, `docs/data-model.md`, `docs/retrieval.md`, `docs/rag.md`, `docs/changelog.md` und `masterplan.md` auf den nachweisbaren M4c-Stand abgeglichen.
+- Lifecycle-Regeln fuer `active`, `archived` und `deleted` sowie die Auswirkungen auf Liste, Search, Chat und Citation-Historie dokumentiert.
+
+### Findings
+
+- Lifecycle-Felder und Constraint sind im Dokumentmodell nachweisbar.
+- `GET /documents` blendet `archived` standardmaessig aus und `deleted` konsequent weg.
+- Search/Retrieval akzeptiert nur `active`.
+- `DELETE /documents/{document_id}` ist als Soft-Delete implementiert.
+- Historische Chat-Citations bleiben fuer geloeschte Dokumente sichtbar.
+
+### Decision
+
+- Dokumentation fuer M4c ist aktualisiert.
+- M4c ist nach dem aktuellen Repository-Stand **abgeschlossen**.
+
+## 2026-05-05 - M4b Dokumentationssync und Konsistenzpruefung
+
+### Changed
+
+- `docs/status.md`, `docs/api.md`, `docs/frontend.md`, `docs/changelog.md` und `masterplan.md` auf den nachweisbaren M4b-Stand abgeglichen.
+- neues Dokument `docs/import.md` fuer Upload-Flow, Importstatus, Fehlercodes, Duplicate- und OCR-Verhalten erstellt.
+
+### Findings
+
+- Upload-GUI und Job-Polling sind nachweisbar implementiert.
+- Upload-Endpunkt antwortet asynchron mit `202 Accepted`.
+- Duplicate und OCR-required sind im Backend und in Tests nachweisbar.
+- Die GUI zeigt Duplicate und OCR-required noch nicht als eigene spezialisierte Ergebniszustaende.
+- Es gibt keinen Direkt-Sprung in die Dokumentdetailansicht nach erfolgreichem Import.
+
+### Decision
+
+- Dokumentation fuer M4b ist aktualisiert.
+- M4b ist nach dem aktuellen Repository-Stand **nicht abgeschlossen**.
+
+## 2026-05-05 - M4a Dokumentationssync und Konsistenzpruefung
+
+### Changed
+
+- `docs/status.md`, `docs/api.md`, `docs/data-model.md`, `docs/frontend.md` und `masterplan.md` wurden auf den nachweisbaren M4a-Stand abgeglichen.
+- neues Dokument `docs/security.md` fuer Auth-, Workspace- und Sicherheitslage erstellt.
+- M4a-Dokumentation beschreibt jetzt explizit den Unterschied zwischen Zielbild und aktuellem Codezustand.
+
+### Findings
+
+- `AUTH_REQUIRED`, `ADMIN_REQUIRED` und `WORKSPACE_REQUIRED` sind nachweisbar.
+- echte Login-/Logout-/Session-Endpunkte sind nicht nachweisbar.
+- `workspace_memberships` und `auth_sessions` sind nicht nachweisbar.
+- Dokumente und Chat verwenden weiterhin `workspace_id` aus Request oder URL-Kontext.
+- Upload nutzt weiterhin `settings.default_workspace_id` und `settings.default_user_id`.
+
+### Decision
+
+- Dokumentation fuer M4a ist aktualisiert.
+- M4a ist nach dem aktuellen Repository-Stand **nicht abgeschlossen**.
+
 ## 2026-05-05 - M3c Chat/RAG Foundation Abschluss
 
 ### Added
