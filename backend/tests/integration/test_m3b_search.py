@@ -16,7 +16,7 @@ from tests.integration.test_migrations import make_alembic_config, psycopg_url
 
 
 # ---------------------------------------------------------------------------
-# Test IDs — deterministic UUIDs that never collide with migration seeds
+# Test IDs: deterministic UUIDs that never collide with migration seeds
 # ---------------------------------------------------------------------------
 
 WORKSPACE_ID    = "e1000000-0000-0000-0000-000000000001"
@@ -29,6 +29,12 @@ DOC_DB_ID       = "e2000000-0000-0000-0000-000000000003"
 DOC_FAILED_ID   = "e2000000-0000-0000-0000-000000000004"
 DOC_PENDING_ID  = "e2000000-0000-0000-0000-000000000005"
 DOC_OTHER_WS_ID = "e2000000-0000-0000-0000-000000000006"
+DOC_RANK_STRONG_ID = "e2100000-0000-0000-0000-000000000001"
+DOC_RANK_NEW_ID    = "e2100000-0000-0000-0000-000000000002"
+DOC_RANK_OLD_ID    = "e2100000-0000-0000-0000-000000000003"
+DOC_RANK_INDEX_ID  = "e2100000-0000-0000-0000-000000000004"
+DOC_RANK_ID_LOW    = "e2100000-0000-0000-0000-000000000005"
+DOC_RANK_ID_HIGH   = "e2100000-0000-0000-0000-000000000006"
 
 VER_PYTHON_OLD_ID = "e3000000-0000-0000-0000-000000000001"
 VER_PYTHON_ID     = "e3000000-0000-0000-0000-000000000002"
@@ -37,6 +43,12 @@ VER_DB_ID         = "e3000000-0000-0000-0000-000000000004"
 VER_FAILED_ID     = "e3000000-0000-0000-0000-000000000005"
 VER_PENDING_ID    = "e3000000-0000-0000-0000-000000000006"
 VER_OTHER_WS_ID   = "e3000000-0000-0000-0000-000000000007"
+VER_RANK_STRONG_ID = "e3100000-0000-0000-0000-000000000001"
+VER_RANK_NEW_ID    = "e3100000-0000-0000-0000-000000000002"
+VER_RANK_OLD_ID    = "e3100000-0000-0000-0000-000000000003"
+VER_RANK_INDEX_ID  = "e3100000-0000-0000-0000-000000000004"
+VER_RANK_ID_LOW    = "e3100000-0000-0000-0000-000000000005"
+VER_RANK_ID_HIGH   = "e3100000-0000-0000-0000-000000000006"
 
 CHUNK_PYTHON_OLD_ID = "e4000000-0000-0000-0000-000000000001"
 CHUNK_PYTHON_ID     = "e4000000-0000-0000-0000-000000000002"
@@ -45,6 +57,16 @@ CHUNK_DB_ID         = "e4000000-0000-0000-0000-000000000004"
 CHUNK_FAILED_ID     = "e4000000-0000-0000-0000-000000000005"
 CHUNK_PENDING_ID    = "e4000000-0000-0000-0000-000000000006"
 CHUNK_OTHER_WS_ID   = "e4000000-0000-0000-0000-000000000007"
+CHUNK_RANK_STRONG_ID = "e4100000-0000-0000-0000-000000000001"
+CHUNK_RANK_NEW_ID    = "e4100000-0000-0000-0000-000000000002"
+CHUNK_RANK_OLD_ID    = "e4100000-0000-0000-0000-000000000003"
+CHUNK_RANK_INDEX_0_ID = "e4100000-0000-0000-0000-000000000004"
+CHUNK_RANK_INDEX_1_ID = "e4100000-0000-0000-0000-000000000005"
+CHUNK_RANK_ID_LOW     = "e4100000-0000-0000-0000-000000000006"
+CHUNK_RANK_ID_HIGH    = "e4100000-0000-0000-0000-000000000007"
+
+RANKING_QUERY = "rankingterm orderterm"
+RANKING_BASE_CONTENT = "rankingterm orderterm baseline"
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +119,74 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (DOC_OTHER_WS_ID, OTHER_WS_ID,  USER_ID, "Other WS Doc",   "hash-m3b-other-ws"),
             ],
         )
+        cur.executemany(
+            """
+            INSERT INTO documents
+                (id, workspace_id, owner_user_id, current_version_id,
+                 title, source_type, mime_type, content_hash, import_status,
+                 created_at, updated_at)
+            VALUES
+                (%s::uuid, %s::uuid, %s::uuid, NULL,
+                 %s, 'upload', 'text/plain', %s, 'pending',
+                 %s::timestamptz, %s::timestamptz)
+            """,
+            [
+                (
+                    DOC_RANK_STRONG_ID,
+                    WORKSPACE_ID,
+                    USER_ID,
+                    "Ranking Strong",
+                    "hash-m3b-rank-strong",
+                    "2026-05-02T12:00:00Z",
+                    "2026-05-02T12:00:00Z",
+                ),
+                (
+                    DOC_RANK_NEW_ID,
+                    WORKSPACE_ID,
+                    USER_ID,
+                    "Ranking Newer Tie",
+                    "hash-m3b-rank-new",
+                    "2026-05-06T12:00:00Z",
+                    "2026-05-06T12:00:00Z",
+                ),
+                (
+                    DOC_RANK_OLD_ID,
+                    WORKSPACE_ID,
+                    USER_ID,
+                    "Ranking Older Tie",
+                    "hash-m3b-rank-old",
+                    "2026-05-05T12:00:00Z",
+                    "2026-05-05T12:00:00Z",
+                ),
+                (
+                    DOC_RANK_INDEX_ID,
+                    WORKSPACE_ID,
+                    USER_ID,
+                    "Ranking Chunk Index Tie",
+                    "hash-m3b-rank-index",
+                    "2026-05-04T12:00:00Z",
+                    "2026-05-04T12:00:00Z",
+                ),
+                (
+                    DOC_RANK_ID_LOW,
+                    WORKSPACE_ID,
+                    USER_ID,
+                    "Ranking Chunk ID Low",
+                    "hash-m3b-rank-id-low",
+                    "2026-05-03T12:00:00Z",
+                    "2026-05-03T12:00:00Z",
+                ),
+                (
+                    DOC_RANK_ID_HIGH,
+                    WORKSPACE_ID,
+                    USER_ID,
+                    "Ranking Chunk ID High",
+                    "hash-m3b-rank-id-high",
+                    "2026-05-03T12:00:00Z",
+                    "2026-05-03T12:00:00Z",
+                ),
+            ],
+        )
 
         # Document versions
         cur.executemany(
@@ -118,6 +208,24 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (VER_OTHER_WS_ID,   DOC_OTHER_WS_ID, 1, "# Other WS",         "md-hash-other-ws"),
             ],
         )
+        cur.executemany(
+            """
+            INSERT INTO document_versions
+                (id, document_id, version_number, normalized_markdown, markdown_hash,
+                 parser_version, ocr_used, ki_provider, ki_model, metadata, created_at)
+            VALUES
+                (%s::uuid, %s::uuid, 1, %s, %s,
+                 '1.0', false, NULL, NULL, '{}'::jsonb, %s::timestamptz)
+            """,
+            [
+                (VER_RANK_STRONG_ID, DOC_RANK_STRONG_ID, "# Ranking Strong", "md-hash-rank-strong", "2026-05-02T12:01:00Z"),
+                (VER_RANK_NEW_ID, DOC_RANK_NEW_ID, "# Ranking New", "md-hash-rank-new", "2026-05-06T12:01:00Z"),
+                (VER_RANK_OLD_ID, DOC_RANK_OLD_ID, "# Ranking Old", "md-hash-rank-old", "2026-05-05T12:01:00Z"),
+                (VER_RANK_INDEX_ID, DOC_RANK_INDEX_ID, "# Ranking Index", "md-hash-rank-index", "2026-05-04T12:01:00Z"),
+                (VER_RANK_ID_LOW, DOC_RANK_ID_LOW, "# Ranking ID Low", "md-hash-rank-id-low", "2026-05-03T12:01:00Z"),
+                (VER_RANK_ID_HIGH, DOC_RANK_ID_HIGH, "# Ranking ID High", "md-hash-rank-id-high", "2026-05-03T12:01:00Z"),
+            ],
+        )
 
         # Set current_version_id; VER_PYTHON_OLD_ID is intentionally not current
         cur.executemany(
@@ -129,6 +237,12 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (VER_FAILED_ID,   DOC_FAILED_ID),
                 (VER_PENDING_ID,  DOC_PENDING_ID),
                 (VER_OTHER_WS_ID, DOC_OTHER_WS_ID),
+                (VER_RANK_STRONG_ID, DOC_RANK_STRONG_ID),
+                (VER_RANK_NEW_ID, DOC_RANK_NEW_ID),
+                (VER_RANK_OLD_ID, DOC_RANK_OLD_ID),
+                (VER_RANK_INDEX_ID, DOC_RANK_INDEX_ID),
+                (VER_RANK_ID_LOW, DOC_RANK_ID_LOW),
+                (VER_RANK_ID_HIGH, DOC_RANK_ID_HIGH),
             ],
         )
 
@@ -142,10 +256,16 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 ("failed",  DOC_FAILED_ID),
                 ("pending", DOC_PENDING_ID),
                 ("chunked", DOC_OTHER_WS_ID),
+                ("chunked", DOC_RANK_STRONG_ID),
+                ("chunked", DOC_RANK_NEW_ID),
+                ("chunked", DOC_RANK_OLD_ID),
+                ("chunked", DOC_RANK_INDEX_ID),
+                ("chunked", DOC_RANK_ID_LOW),
+                ("chunked", DOC_RANK_ID_HIGH),
             ],
         )
 
-        # Chunks — search_vector is GENERATED STORED (auto-populated from content).
+        # Chunks: search_vector is GENERATED STORED (auto-populated from content).
         # metadata must contain a normalized source_anchor per migration 0010 constraint.
         # Each chunk has a unique term so tests can target it precisely.
         cur.executemany(
@@ -160,11 +280,11 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                  NULL, %s::jsonb, now())
             """,
             [
-                # Old version of DOC_PYTHON — excluded because not current version
+                # Old version of DOC_PYTHON: excluded because not current version
                 (CHUNK_PYTHON_OLD_ID, DOC_PYTHON_ID,   VER_PYTHON_OLD_ID, 0,
                  "anchor-py-old", "oldversion programming language history documentation Python",
                  "oldversion programming language history documentation Python", _NULL_SOURCE_ANCHOR),
-                # Current version chunks — returned for matching queries
+                # Current version chunks: returned for matching queries
                 (CHUNK_PYTHON_ID,     DOC_PYTHON_ID,   VER_PYTHON_ID,     0,
                  "anchor-py",     "Python is a programming language used for software development",
                  "Python is a programming language used for software development", _NULL_SOURCE_ANCHOR),
@@ -174,18 +294,39 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (CHUNK_DB_ID,         DOC_DB_ID,       VER_DB_ID,         0,
                  "anchor-db",     "Database query optimization improves system performance dramatically",
                  "Database query optimization improves system performance dramatically", _NULL_SOURCE_ANCHOR),
-                # Failed document — excluded by import_status filter
+                # Failed document: excluded by import_status filter
                 (CHUNK_FAILED_ID,     DOC_FAILED_ID,   VER_FAILED_ID,     0,
                  "anchor-failed", "failedcontent document processing error occurred",
                  "failedcontent document processing error occurred", _NULL_SOURCE_ANCHOR),
-                # Pending document — excluded by import_status filter
+                # Pending document: excluded by import_status filter
                 (CHUNK_PENDING_ID,    DOC_PENDING_ID,  VER_PENDING_ID,    0,
                  "anchor-pending","pendingcontent document import is pending processing",
                  "pendingcontent document import is pending processing", _NULL_SOURCE_ANCHOR),
-                # Different workspace — excluded when querying WORKSPACE_ID
+                # Different workspace: excluded when querying WORKSPACE_ID
                 (CHUNK_OTHER_WS_ID,   DOC_OTHER_WS_ID, VER_OTHER_WS_ID,   0,
                  "anchor-other",  "exclusiveterm belongs to a completely different workspace context",
                  "exclusiveterm belongs to a completely different workspace context", _NULL_SOURCE_ANCHOR),
+                # Ranking regression data:
+                # - strong chunk wins by rank because both query terms repeat.
+                # - all following chunks have identical content and rank.
+                # - tie-breakers are document.created_at DESC, chunk_index ASC, chunk_id ASC.
+                (CHUNK_RANK_STRONG_ID, DOC_RANK_STRONG_ID, VER_RANK_STRONG_ID, 0,
+                 "anchor-rank-strong",
+                 f"{RANKING_BASE_CONTENT} {RANKING_BASE_CONTENT} {RANKING_BASE_CONTENT}",
+                 f"{RANKING_BASE_CONTENT} {RANKING_BASE_CONTENT} {RANKING_BASE_CONTENT}",
+                 _NULL_SOURCE_ANCHOR),
+                (CHUNK_RANK_NEW_ID, DOC_RANK_NEW_ID, VER_RANK_NEW_ID, 0,
+                 "anchor-rank-new", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
+                (CHUNK_RANK_OLD_ID, DOC_RANK_OLD_ID, VER_RANK_OLD_ID, 0,
+                 "anchor-rank-old", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
+                (CHUNK_RANK_INDEX_0_ID, DOC_RANK_INDEX_ID, VER_RANK_INDEX_ID, 0,
+                 "anchor-rank-index-0", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
+                (CHUNK_RANK_INDEX_1_ID, DOC_RANK_INDEX_ID, VER_RANK_INDEX_ID, 1,
+                 "anchor-rank-index-1", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
+                (CHUNK_RANK_ID_LOW, DOC_RANK_ID_LOW, VER_RANK_ID_LOW, 0,
+                 "anchor-rank-id-low", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
+                (CHUNK_RANK_ID_HIGH, DOC_RANK_ID_HIGH, VER_RANK_ID_HIGH, 0,
+                 "anchor-rank-id-high", RANKING_BASE_CONTENT, RANKING_BASE_CONTENT, _NULL_SOURCE_ANCHOR),
             ],
         )
 
@@ -274,6 +415,67 @@ def test_search_result_has_required_fields(client: TestClient) -> None:
     assert result["rank"] > 0.0
     assert "source_anchor" in result
     assert "type" in result["source_anchor"]
+
+
+def test_search_ranking_order_is_deterministic(client: TestClient) -> None:
+    # Ranking expectation:
+    # 1. rank DESC: CHUNK_RANK_STRONG_ID repeats the exact query terms.
+    # 2. document.created_at DESC: NEW beats OLD for equal-rank chunks.
+    # 3. chunk_index ASC: index 0 beats index 1 inside the same document.
+    # 4. chunk_id ASC: LOW beats HIGH when rank, created_at and chunk_index tie.
+    expected_order = [
+        CHUNK_RANK_STRONG_ID,
+        CHUNK_RANK_NEW_ID,
+        CHUNK_RANK_OLD_ID,
+        CHUNK_RANK_INDEX_0_ID,
+        CHUNK_RANK_INDEX_1_ID,
+        CHUNK_RANK_ID_LOW,
+        CHUNK_RANK_ID_HIGH,
+    ]
+
+    response = client.get(
+        "/api/v1/search/chunks",
+        params={"workspace_id": WORKSPACE_ID, "q": RANKING_QUERY, "limit": len(expected_order)},
+    )
+
+    assert response.status_code == 200
+    results = response.json()
+    assert [result["chunk_id"] for result in results] == expected_order
+
+    ranks = {result["chunk_id"]: result["rank"] for result in results}
+    assert ranks[CHUNK_RANK_STRONG_ID] > ranks[CHUNK_RANK_NEW_ID]
+    for chunk_id in expected_order[1:]:
+        assert ranks[chunk_id] == ranks[CHUNK_RANK_NEW_ID]
+
+
+def test_search_chunks_http_contract_filters_to_current_readable_workspace_chunks(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/search/chunks",
+        params={"workspace_id": WORKSPACE_ID, "q": "programming"},
+    )
+
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) >= 1
+
+    chunk_ids = {result["chunk_id"] for result in results}
+    document_ids = {result["document_id"] for result in results}
+
+    assert CHUNK_PYTHON_ID in chunk_ids
+    assert CHUNK_PYTHON_OLD_ID not in chunk_ids
+    assert CHUNK_FAILED_ID not in chunk_ids
+    assert CHUNK_PENDING_ID not in chunk_ids
+    assert CHUNK_OTHER_WS_ID not in chunk_ids
+    assert document_ids <= {DOC_PYTHON_ID, DOC_ML_ID, DOC_DB_ID}
+
+    for result in results:
+        assert result["chunk_id"]
+        assert result["document_id"] in {DOC_PYTHON_ID, DOC_ML_ID, DOC_DB_ID}
+        assert result["document_version_id"]
+        assert isinstance(result["source_anchor"], dict)
+        assert result["source_anchor"]["type"] in {"text", "pdf_page", "docx_paragraph", "legacy_unknown"}
+        assert isinstance(result["rank"], float)
+        assert result["rank"] > 0.0
 
 
 def test_search_hits_belong_to_queried_workspace(client: TestClient) -> None:

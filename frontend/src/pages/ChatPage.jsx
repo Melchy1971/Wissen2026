@@ -107,7 +107,10 @@ export function ChatPage() {
     }
 
     try {
-      const response = mapPostedChatResponse(await postChatMessage(activeSessionId, { workspaceId, question, retrievalLimit: 8 }));
+      const response = mapPostedChatResponse(
+        await postChatMessage(activeSessionId, { workspaceId, question, retrievalLimit: 8 }),
+        { question },
+      );
       setQuestionInput('');
       setDetailState((current) => {
         const existingMessages = current.item?.messages || [];

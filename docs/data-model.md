@@ -166,7 +166,7 @@ Die Zuordnung ist additiv: Der Primaerschluessel `(document_id, tag_id, source)`
 
 ## Chat- und Analyse-Stand
 
-`chat_sessions`, `chat_messages` und `chat_citations` bilden jetzt die Persistenzgrundlage fuer Chat/RAG-Verlaeufe. `basis_type` unterscheidet weiter `knowledge_base`, `general`, `mixed` und `unknown`. Message-Inhalte werden append-only erzeugt; ein Bearbeitungspfad ist im aktuellen Stand nicht vorgesehen.
+`chat_sessions`, `chat_messages` und `chat_citations` bilden jetzt die Persistenzgrundlage fuer Chat/RAG-Verlaeufe. M3c nutzt diese Tabellen aktiv ueber die Chat-HTTP-API und den `RagChatService`. `basis_type` unterscheidet weiter `knowledge_base`, `general`, `mixed` und `unknown`. Message-Inhalte werden append-only erzeugt; ein Bearbeitungspfad ist im aktuellen Stand nicht vorgesehen.
 
 Chat-spezifische Regeln:
 
@@ -175,6 +175,10 @@ Chat-spezifische Regeln:
 - `chat_citations` enthaelt `message_id`, `chunk_id`, `document_id`, `source_anchor`.
 - Citations referenzieren `documents` und `document_chunks` referenziell konsistent.
 - Fuer zitierte Dokumente und Chunks ist Loeschen bewusst restriktiv modelliert, damit historische Chat-Quellen nicht still brechen.
+- `POST /api/v1/chat/sessions/{session_id}/messages` speichert zuerst die User-Message und danach bei ausreichendem Kontext die Assistant-Message.
+- Assistant-Messages mit `basis_type = knowledge_base` muessen im erfolgreichen RAG-Pfad Citations mit `chunk_id` besitzen.
+- Insufficient-Context-, Retrieval- und LLM-Fehler speichern keine freie Assistant-Antwort.
+- `chat_messages.metadata` kann technische RAG-Metadaten wie Prompt-Version und Retrieval-Scores enthalten; die API gibt diese Rohmetadaten nicht ungefiltert aus.
 
 Analysefunktionen werden ueber `analysis_groups`, `analysis_group_documents`, `analysis_results` und `analysis_result_sources` vorbereitet. Ergebnisarten sind `merge`, `compare` und `refine`. Analyseergebnisse koennen vor einem spaeteren Commit gespeichert werden; `commit_ref` ist optional.
 
@@ -251,7 +255,20 @@ Bewusste Nicht-Ziele in M3b:
 - keine Embedding-Tabellen
 - keine Vektorindizes
 - keine semantische Suche als Pflichtbestandteil
-- Chat-Persistenz ist fuer Sessions, Messages und Citations vorhanden; ein vollstaendiger RAG-Antwortpfad ist damit noch nicht automatisch implementiert.
+- Chat-Persistenz ist fuer Sessions, Messages und Citations vorhanden; der vollstaendige M3c-RAG-Antwortpfad ist oberhalb des Retrieval-Modells im Service-Layer implementiert.
+
+## M3c Chat/RAG
+
+M3c fuegt keine neue Datenbanktabelle hinzu, sondern nutzt die vorhandenen Chat-Tabellen aus Migration `20260504_0012_chat_message_metadata_and_citations.py`.
+
+Service-Regeln:
+
+- Chat-Sessions werden ueber `chat_sessions` verwaltet.
+- User-Fragen werden als `chat_messages.role = user` persistiert.
+- Assistant-Antworten aus dem RAG-Pfad werden als `chat_messages.role = assistant` und `basis_type = knowledge_base` persistiert.
+- Citations werden in `chat_citations` gespeichert und enthalten mindestens `chunk_id`, `document_id` und normalisiertes `source_anchor`.
+- Die API response fuer `POST /messages` enthaelt die Assistant-Message; die User-Message ist persistiert, aber nicht Teil dieser Response.
+- Fehlende oder unzureichende Quellen verhindern eine Assistant-Persistenz.
 
 ## V1-Grenzen
 
@@ -259,7 +276,7 @@ Bewusste Nicht-Ziele in M3b:
 - Keine Rollen- oder Rechtepruefung.
 - Keine UI.
 - Keine OCR-Ausfuehrung.
-- Keine vollstaendig integrierte Chat- oder Analyse-Service-Logik ueber HTTP.
+- Keine vollstaendig integrierte Analyse-Service-Logik ueber HTTP.
 - Keine verpflichtende Vektorsuche.
 - Keine Embedding-Pipeline.
 - Keine Speicherung von Originaldateien.

@@ -1,6 +1,6 @@
 # Projektstatus
 
-Stand: 2026-05-04
+Stand: 2026-05-05
 
 ## Paket-5-Abschlussstand
 
@@ -54,7 +54,7 @@ Entscheidung:
 
 ## M3b Retrieval Foundation
 
-Stand des Abgleichs mit Code, Backend-Tests, Frontend-Tests und Build am 2026-05-04:
+Stand des Abgleichs mit Code, Backend-Tests, Frontend-Tests und Build am 2026-05-05:
 
 - Search API unter `/api/v1/search/chunks` ist implementiert.
 - Ranking-Baseline ist im Query-Pfad ueber PostgreSQL FTS und `ts_rank` angelegt.
@@ -70,99 +70,110 @@ Verifizierter Nachweis:
 - Frontend-Screens inklusive Suche: `8 passed`
 - Frontend-Build: `vite build` gruen
 
-Noch offene Luecken vor hartem Abschluss:
+Restliche Hinweise nach hartem Abschluss:
 
-- Es gibt aktuell API-Tests und Service-Tests, aber keinen belastbaren PostgreSQL-Retrieval-Integrationstest fuer echte Suchtreffer ueber `/api/v1/search/chunks`.
-- Die Ranking-Baseline ist implementiert, aber nicht durch einen echten Ranking-Regressionstest mit Trefferreihenfolge abgesichert.
-- Der dokumentierte Suchvertrag und die Implementierung sind jetzt grob synchronisiert, aber die Search-API ist noch nicht in einem eigenstaendigen stabilen API-Contract analog zum Dokumentvertrag formalisiert.
+- PostgreSQL-Retrieval-Integrationstests und Ranking-Regressionstests existieren, laufen aber nur mit gesetzter `TEST_DATABASE_URL`.
+- SQLite bleibt fuer diese Tests ausgeschlossen.
+- Der Search-Vertrag ist in `docs/api.md` und `docs/retrieval.md` dokumentiert.
 
 Abschlussbewertung:
 
-- Score: `88/100`
-- Entscheidung fuer M3b: `teilweise abgeschlossen`, aber noch kein harter Abschluss.
-- Go fuer M3c Chat/RAG: `No-Go`
+- Score: `92/100`
+- Entscheidung fuer M3b: `abgeschlossen`
+- Go fuer M3c Chat/RAG: `Go`
 
 Begruendung:
 
 - Der fachliche Scope von M3b ist weitgehend geliefert.
-- Die harten Abschlusskriterien scheitern derzeit nicht an der GUI oder an der Indexmigration, sondern an fehlendem End-to-End-Nachweis fuer Suchqualitaet und Ranking-Stabilitaet auf dem PostgreSQL-Zielpfad.
-- Ohne diesen Nachweis wuerde M3c Chat/RAG auf einem noch nicht ausreichend abgesicherten Retrieval-Fundament aufsetzen.
+- PostgreSQL-Integrationstests und Ranking-Regressionstests sind vorhanden, laufen aber nur mit gesetzter `TEST_DATABASE_URL`.
+- M3c setzt auf diesen Search-Service-Vertrag auf und mockt Retrieval in Standardtests deterministisch.
 
 ## M3c Chat/RAG Foundation
 
-Stand des Abgleichs mit Code, fokussierten Backend-Tests, Frontend-Tests und Build am 2026-05-04:
+Stand des Abgleichs mit Code, Backend-Tests, Frontend-Tests und Build am 2026-05-05:
 
-- Chat-Persistenz fuer `chat_sessions`, `chat_messages` und `chat_citations` ist als Datenmodell, Migration und Service angelegt.
-- Context Builder ist implementiert.
-- Prompt Builder ist implementiert.
-- Citation Mapper ist implementiert.
-- Insufficient-Context-Policy ist implementiert.
-- Chat-UI mit Sessionliste, neuer Session, Nachrichtenverlauf, Frageformular, Antwortanzeige, Quellenanzeige und Insufficient-Context-Zustand ist implementiert.
-- Der Frontend-API-Client ist auf den dokumentierten Chat-Vertrag `/api/v1/chat/...` ausgerichtet.
-
-Nicht oder nicht hart abgeschlossen:
-
-- Es gibt noch keinen verifizierten Backend-HTTP-Pfad fuer:
+- Chat Sessions API ist implementiert und getestet:
   - `POST /api/v1/chat/sessions`
   - `GET /api/v1/chat/sessions`
-  - `GET /api/v1/chat/sessions/{id}`
-  - `POST /api/v1/chat/sessions/{id}/messages`
-- Es gibt noch keinen end-to-end verdrahteten RAG-Antwortservice, der Retrieval, Context Builder, Prompt Builder, Policy, LLM-Aufruf und Citation Mapping ueber einen echten API-Pfad zusammensetzt.
-- Eine stabile Retrieval-Integration fuer Chat ist damit noch nicht praktisch nachgewiesen.
+  - `GET /api/v1/chat/sessions/{session_id}`
+- Message API ist implementiert und getestet:
+  - `POST /api/v1/chat/sessions/{session_id}/messages`
+  - Request: `workspace_id`, `question`, `retrieval_limit`
+  - Response: Assistant-`ChatMessageResponse` mit Citations und Confidence
+- `RagChatService` ist implementiert und verdrahtet:
+  - User-Frage speichern
+  - Retrieval ausfuehren
+  - Context Builder ausfuehren
+  - Insufficient-Context-Policy pruefen
+  - Prompt Builder ausfuehren
+  - LLM Provider aufrufen
+  - Assistant-Antwort speichern
+  - Citations speichern
+  - API Response erzeugen
+- Context Builder ist implementiert und getestet.
+- Prompt Builder ist implementiert und getestet.
+- Citation Mapper ist implementiert und getestet.
+- Insufficient-Context-Policy ist implementiert und getestet.
+- Fake LLM Provider ist implementiert und getestet.
+- Chat-UI mit Sessionliste, neuer Session, Nachrichtenverlauf, Frageformular, Antwortanzeige, Quellenanzeige und Fehlerzustaenden ist implementiert und gegen den echten Vertrag getestet.
 
-Scope-Pruefung:
+Fehlercodes:
 
-- Chat Sessions: teilweise vorhanden, aber nur als Persistenzservice und GUI-Vertrag, nicht als harter API-Nachweis.
-- Message API: noch nicht implementiert oder verifiziert.
-- Retrieval Integration: Bausteine vorhanden, aber kein vollstaendiger API-Flow.
-- Context Builder: implementiert und getestet.
-- Prompt Builder: implementiert und getestet.
-- Citation Mapper: implementiert und getestet.
-- GUI Chat: implementiert und getestet.
+- `CHAT_SESSION_NOT_FOUND`
+- `CHAT_MESSAGE_INVALID`
+- `CHAT_PERSISTENCE_FAILED`
+- `RETRIEVAL_FAILED`
+- `INSUFFICIENT_CONTEXT`
+- `LLM_UNAVAILABLE`
 
 Nicht-Scope-Pruefung:
 
 - keine Agenten: eingehalten.
-- keine Tool-Nutzung im Produktflow: eingehalten.
-- kein automatisches Bearbeiten von Dokumenten: eingehalten.
+- kein Tool Use im Produktflow: eingehalten.
+- keine Dokumentmutation: eingehalten.
+- kein Streaming: eingehalten.
+- keine Embeddings: eingehalten.
+- kein produktiver LLM Provider: bleibt M4-Scope.
 
-Test-Pruefung:
+Verifizierter Nachweis:
 
-- Unit-Tests fuer Context Builder, Prompt Builder, Citation Mapper und Insufficient-Context-Policy: vorhanden.
-- Persistenztests fuer Chat-Sessions, Messages und Citations: vorhanden.
-- GUI-Tests fuer ChatPage: vorhanden.
-- API-Tests fuer Chat-Endpoints: fehlen.
-- End-to-End-RAG-Pipeline-Tests ueber echten Antwortpfad: fehlen.
+- Backend-Fokuslauf fuer Chat/RAG, Context, Prompt, Citation, Policy und Persistenz: `74 passed`.
+- Frontend-Gesamtlauf: `14 passed`.
+- Frontend-Build: erfolgreich.
 
 Abschlussbewertung:
 
-- Score: `74/100`
-- Entscheidung fuer M3c: `teilweise abgeschlossen`, aber nicht hart abgeschlossen.
-- Go fuer M4: `No-Go`
+- Score: `94/100`
+- Entscheidung fuer M3c: `abgeschlossen`
+- Go fuer M4: `Go`
 
 Begruendung:
 
-- Die M3c-Bausteine und die Chat-GUI sind fachlich weit vorangekommen.
-- Der Meilenstein scheitert derzeit nicht an UI oder Hilfsdiensten, sondern an der fehlenden stabilen Chat-API und am fehlenden end-to-end RAG-Nachweis.
-- Ohne diesen Nachweis waere M4 auf ein noch nicht belastbar integriertes Chat/RAG-Fundament aufgesetzt.
+- Die stabilen Chat-HTTP-Endpunkte sind vorhanden und API-getestet.
+- Der RAG-Antwortpfad ist ueber Service- und API-Tests nachgewiesen.
+- Quellenpflicht und Insufficient-Context-Schutz sind technisch umgesetzt.
+- Die GUI konsumiert den echten Chat-Vertrag.
+- Restpunkte wie produktiver LLM Provider, Streaming, Agenten, Embeddings und Browser-E2E sind M4- oder spaetere Scope-Themen und blockieren M3c nicht.
 
 ## M4 Integrierter Wissensbasis-Chat
 
-Stand des Abgleichs mit Code und Dokumentation am 2026-05-04:
+Stand des Abgleichs mit Code und Dokumentation am 2026-05-05:
 
 - M4 ist noch nicht implementiert.
-- Die dafuer benoetigte M3c-Foundation ist nur teilweise abgeschlossen.
+- Die dafuer benoetigte M3c-Foundation ist abgeschlossen.
 
-Fehlende Integrationsbausteine vor echtem M4-Start:
+Naechste Integrationsbausteine fuer M4:
 
-- stabile Chat-HTTP-API im Backend
-- verdrahteter produktiver Antwortpfad ueber Retrieval, Policy, Prompting, LLM und Citation Mapping
-- API- und Integrationsnachweise fuer diesen Antwortpfad
+- produktiven LLM Provider konfigurieren
+- Provider-Fehler, Timeouts und Betriebsgrenzen haerten
+- optional Streaming definieren
+- Chat-Funktionen fuer Produktbetrieb erweitern
+- keine Dokumentmutation ohne gesondertes M5-Gate
 
 Entscheidung:
 
 - Status fuer M4: `missing`
-- Startfreigabe: `No-Go`
+- Startfreigabe: `Go`
 
 ## Ground Truth = Code, nicht Dokumentation
 
@@ -368,7 +379,8 @@ Relevante Migrationen:
 - Authentifizierung und Autorisierung.
 - Benutzer- und Workspace-Verwaltung als echte Produktfunktion.
 - Vollstaendige Quellenpositions-Erfassung pro Chunk fuer alle Parser.
-- Ranking, Suche, Chat- und Analyse-Fachlogik oberhalb der vorbereiteten Tabellen.
+- Analyse-Fachlogik oberhalb der vorbereiteten Tabellen.
+- Produktiver LLM Provider fuer M4.
 - Vektorsuche und Embedding-Pipeline.
 - Einheitliche Parser-Qualitaetsmetriken und Parser-Confidence.
 - Kompatibler `/api/v1/documents`-Alias fuer die Dokument-API.

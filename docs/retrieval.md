@@ -1,38 +1,174 @@
 # Retrieval
 
-Stand: 2026-05-04
+Stand: 2026-05-05
 
-Dieses Dokument ist der kurze Einstiegspunkt fuer den aktuellen Retrieval-Stand.
+Dieses Dokument definiert den stabilen M3b Retrieval-Vertrag fuer den implementierten Endpoint `GET /api/v1/search/chunks`.
 
-## Implementiert
+## Implementierter Scope
 
-- read-only Search API unter `/api/v1/search/chunks`
-- PostgreSQL-FTS auf Chunk-Ebene
-- Ranking-Baseline ueber `ts_rank`
-- stabile Sortierung mit Tie-Breakern
-- GUI-Suche auf der Dokumentuebersicht
-- sichtbare Lade-, Leer- und Fehlerzustaende
-- Failure-Mode-Matrix und minimales Evaluation-Dataset
+- Read-only Chunk-Suche.
+- PostgreSQL Full Text Search auf Chunk-Ebene.
+- Suche ueber `document_chunks.search_vector`.
+- Ranking ueber PostgreSQL `ts_rank`.
+- stabile Sortierung mit expliziten Tie-Breakern.
+- Ausschluss nicht aktueller Versionen.
+- Ausschluss nicht lesbarer Importstatus.
+- normalisierte `source_anchor`-Response.
 
-## Nicht im Scope
+## Endpoint
 
-- voll integrierte Chat-API
-- voll integrierte LLM-Antwortgenerierung
-- komplexes Re-Ranking
-- semantische Suche / Embeddings
+```text
+GET /api/v1/search/chunks
+```
 
-## Referenzen
+Query Parameter:
 
-- `docs/m3b-retrieval-foundation.md`
-- `docs/m3b-retrieval-evaluation-dataset.md`
-- `docs/rag-dataflow.md`
-- `docs/chat-rag-api-contract.md`
-- `docs/api.md`
+| Name | Typ | Required | Default | Limit / Regel |
+|---|---|---:|---:|---|
+| `workspace_id` | string | ja | - | nicht leer |
+| `q` | string | ja | - | nicht leer |
+| `limit` | integer | nein | `20` | `1..100` |
+| `offset` | integer | nein | `0` | `>= 0` |
 
-## Abschlussstand
+Der Endpoint akzeptiert aktuell keine weiteren Filterparameter.
 
-- Fachlicher Scope: weitgehend umgesetzt
-- Harter Abschluss: noch offen
-- Hauptgrund: fehlender echter PostgreSQL-Retrieval- und Ranking-Nachweis fuer den Query-Pfad
-- Entscheidung fuer harten M3c-Chat/RAG-Abschluss: `No-Go`, bis Retrieval und Chat-API end-to-end belegt sind
-- Entscheidung fuer M4-Start: `No-Go`
+## Response Schema
+
+Response ist ein JSON-Array von `SearchChunkResult`:
+
+```json
+[
+  {
+    "document_id": "document-id",
+    "document_title": "Document title",
+    "document_created_at": "2026-05-01T10:00:00Z",
+    "document_version_id": "version-id",
+    "version_number": 1,
+    "chunk_id": "chunk-id",
+    "position": 0,
+    "text_preview": "First 200 characters of chunk content",
+    "source_anchor": {
+      "type": "text",
+      "page": null,
+      "paragraph": null,
+      "char_start": 0,
+      "char_end": 200
+    },
+    "rank": 0.123,
+    "filters": {}
+  }
+]
+```
+
+Felder:
+
+| Feld | Bedeutung |
+|---|---|
+| `document_id` | Dokument des Treffers |
+| `document_title` | Titel des Dokuments |
+| `document_created_at` | Erstellzeitpunkt des Dokuments |
+| `document_version_id` | aktuelle Version, aus der der Treffer stammt |
+| `version_number` | Versionsnummer |
+| `chunk_id` | stabile Chunk-ID |
+| `position` | Chunk-Position, entspricht `chunk_index` |
+| `text_preview` | DB-seitig gekuerzte Vorschau, maximal 200 Zeichen |
+| `source_anchor` | normalisierter Quellenanker |
+| `rank` | PostgreSQL `ts_rank` als Float |
+| `filters` | aktuell immer `{}` |
+
+## PostgreSQL-Abhaengigkeit
+
+M3b Retrieval ist PostgreSQL-only.
+
+Verwendete PostgreSQL-Funktionen:
+
+- `tsvector` Generated Column `document_chunks.search_vector`
+- GIN-Index `ix_document_chunks_search_vector`
+- `plainto_tsquery('simple', q)`
+- `ts_rank(search_vector, ts_query)`
+
+Verhalten bei SQLite oder nicht verfuegbarem Search Backend:
+
+- SQLite fuehrt diesen Endpoint nicht fachlich aus.
+- Wenn der aktive SQLAlchemy-Dialect nicht `postgresql` ist, liefert der Endpoint `503 SERVICE_UNAVAILABLE`.
+- Ohne verfuegbares Search Backend gibt es keine Fallback-Suche.
+
+## Filter- und Sichtbarkeitsregeln
+
+Ein Chunk darf nur als Treffer erscheinen, wenn alle Bedingungen gelten:
+
+- `documents.workspace_id = workspace_id`
+- `documents.current_version_id = document_versions.id`
+- `document_chunks.document_version_id = document_versions.id`
+- `document_chunks.search_vector @@ plainto_tsquery('simple', q)`
+- `documents.import_status in ('parsed', 'chunked')`
+
+Damit werden ausgeschlossen:
+
+- Chunks alter, nicht aktueller Versionen.
+- Dokumente mit `pending`.
+- Dokumente mit `failed`.
+- Dokumente ausserhalb des angefragten Workspaces.
+
+## Sortierlogik
+
+Die Trefferreihenfolge ist stabil und Teil des Vertrags:
+
+1. `rank DESC`
+2. `document.created_at DESC`
+3. `chunk_index ASC`
+4. `chunk_id ASC`
+
+Ranking-Erwartung:
+
+- Staerkere PostgreSQL-FTS-Treffer kommen zuerst.
+- Bei gleichem Rank kommt das neuere Dokument zuerst.
+- Bei gleichem Dokumentdatum kommt der fruehere Chunk zuerst.
+- Bei weiterhin gleichem Sortierschluessel entscheidet `chunk_id ASC`.
+
+## Fehlercodes
+
+Fehlerformat:
+
+```json
+{
+  "error": {
+    "code": "SERVICE_UNAVAILABLE",
+    "message": "Chunk search requires PostgreSQL full text search",
+    "details": {}
+  }
+}
+```
+
+| HTTP Status | Code | Ursache |
+|---:|---|---|
+| `422` | `WORKSPACE_REQUIRED` | `workspace_id` fehlt oder ist leer |
+| `422` | `INVALID_QUERY` | `q` fehlt oder ist leer |
+| `422` | `INVALID_PAGINATION` | `limit > 100`, `limit < 1` oder `offset < 0` |
+| `503` | `SERVICE_UNAVAILABLE` | Search erfordert PostgreSQL oder Backend ist nicht verfuegbar |
+| `500` | `INTERNAL_ERROR` | unerwarteter interner Fehler |
+
+## Nicht-Scope
+
+- kein Chat
+- keine LLM-Antwort
+- keine Embeddings
+- keine semantische Suche
+- kein Re-Ranking
+- keine Antwortgenerierung
+- keine Zitatauswahl ueber den gelieferten `source_anchor` hinaus
+- keine Schreiboperationen
+
+## Tests
+
+M3b Search ist ueber PostgreSQL-Integrationstests abgesichert, die nur mit `TEST_DATABASE_URL` laufen:
+
+- echte HTTP-Requests gegen `GET /api/v1/search/chunks`
+- deterministische Fixture-Daten
+- Ausschluss alter Versionen
+- Ausschluss `failed`/`pending`
+- Workspace-Grenze
+- Required Response Fields
+- Ranking-Regression fuer die Sortierlogik
+
+Ohne `TEST_DATABASE_URL` werden diese Tests geskippt. SQLite darf diese Tests nicht ausfuehren.

@@ -36,6 +36,42 @@ class InvalidQueryApiError(ApiError):
     message = "Invalid search query"
 
 
+class ChatSessionNotFoundApiError(ApiError):
+    status_code = 404
+    code = "CHAT_SESSION_NOT_FOUND"
+    message = "Chat session not found"
+
+
+class ChatMessageInvalidApiError(ApiError):
+    status_code = 422
+    code = "CHAT_MESSAGE_INVALID"
+    message = "Chat message is invalid"
+
+
+class ChatPersistenceFailedApiError(ApiError):
+    status_code = 500
+    code = "CHAT_PERSISTENCE_FAILED"
+    message = "Chat persistence failed"
+
+
+class RetrievalFailedApiError(ApiError):
+    status_code = 502
+    code = "RETRIEVAL_FAILED"
+    message = "Retrieval failed"
+
+
+class InsufficientContextApiError(ApiError):
+    status_code = 422
+    code = "INSUFFICIENT_CONTEXT"
+    message = "Insufficient context"
+
+
+class LlmUnavailableApiError(ApiError):
+    status_code = 503
+    code = "LLM_UNAVAILABLE"
+    message = "LLM service unavailable"
+
+
 class DocumentStateConflictApiError(ApiError):
     status_code = 409
     code = "DOCUMENT_STATE_CONFLICT"

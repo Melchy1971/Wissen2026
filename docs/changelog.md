@@ -1,6 +1,48 @@
 # Changelog
 
-Stand: 2026-05-04
+Stand: 2026-05-05
+
+## 2026-05-05 - M3c Chat/RAG Foundation Abschluss
+
+### Added
+
+- Chat-HTTP-API unter `/api/v1/chat/...`:
+  - `POST /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions/{session_id}`
+  - `POST /api/v1/chat/sessions/{session_id}/messages`
+- `RagChatService` als Orchestrator fuer Persistenz, Retrieval, Context Builder, Insufficient-Context-Policy, Prompt Builder, LLM Provider, Citation Mapper und Assistant-Persistenz.
+- Austauschbares LLM-Provider-Interface `generate(system_prompt, user_prompt) -> str`.
+- Deterministischer `FakeLlmProvider` fuer Tests mit simulierbarem Unavailable-, Timeout-, Empty- und No-Citation-Verhalten.
+- Chat-Fehlercodes:
+  - `CHAT_SESSION_NOT_FOUND`
+  - `CHAT_MESSAGE_INVALID`
+  - `CHAT_PERSISTENCE_FAILED`
+  - `RETRIEVAL_FAILED`
+  - `INSUFFICIENT_CONTEXT`
+  - `LLM_UNAVAILABLE`
+- Frontend-ChatPage gegen den echten POST-Message-Vertrag.
+
+### Changed
+
+- `POST /api/v1/chat/sessions/{session_id}/messages` erwartet `workspace_id`, `question` und optional `retrieval_limit`.
+- Der POST-Message-Response ist eine direkte Assistant-`ChatMessageResponse` inklusive `citations` und `confidence`.
+- Die GUI ergaenzt die gesendete User-Frage lokal im Verlauf und zeigt danach die Assistant-Antwort aus der API.
+- Dokumentation fuer Status, API, Datenmodell, RAG, Frontend und Masterplan wurde auf M3c-Abschluss synchronisiert.
+
+### Validated
+
+- Backend-Fokuslauf fuer Chat/RAG, Context, Prompt, Citation, Policy und Persistenz: `74 passed`.
+- Frontend-Gesamtlauf: `14 passed`.
+- Frontend-Build: erfolgreich.
+
+### Outstanding
+
+- Produktiver LLM Provider ist nicht Teil von M3c; aktuell ist der Provider austauschbar und im Default bewusst unkonfiguriert.
+- Kein Streaming.
+- Keine Agenten, kein Tool Use und keine Dokumentmutation.
+- Keine Embeddings oder semantische Suche.
+- Kein Browser-E2E gegen laufendes Backend; M3c ist ueber API-/Service-/Frontend-Vertragstests abgesichert.
 
 ## 2026-05-04 - Paket 5 Abschlussstand
 
@@ -92,11 +134,10 @@ Stand: 2026-05-04
 - Frontend-Such- und Screen-Nachweis: `8 passed`.
 - Frontend-Build: `vite build` erfolgreich.
 
-### Outstanding
+### Superseded
 
-- Kein echter PostgreSQL-Integrationsnachweis fuer Treffer, Filterung und Ranking des Suchendpunkts.
-- Kein expliziter Ranking-Regressionstest fuer stabile Trefferreihenfolge.
-- Daher noch kein harter Go-Status fuer M3c Chat/RAG.
+- Dieser Zwischenstand wurde durch spaetere PostgreSQL- und Ranking-Tests ueberholt.
+- M3c wurde am 2026-05-05 auf dem stabilisierten Retrieval-Vertrag abgeschlossen.
 
 ## 2026-05-04 - M3c Chat/RAG Foundation
 
@@ -121,19 +162,17 @@ Stand: 2026-05-04
 - Frontend-Tests inklusive ChatPage: `11 passed`.
 - Frontend-Build: `vite build` erfolgreich.
 
-### Outstanding
+### Superseded
 
-- Keine stabile Chat-HTTP-API im Backend nachgewiesen.
-- Kein end-to-end RAG-Pipeline-Test ueber echten Antwortpfad.
-- Keine belastbare Retrieval-Integration fuer Chat im produktnahen API-Flow.
-- Daher noch kein harter Abschluss von M3c und kein Go fuer M4.
+- Dieser Zwischenstand wurde durch den Abschluss vom 2026-05-05 ueberholt.
+- Chat-HTTP-API, end-to-end RAG-Pfad und API-Tests sind inzwischen implementiert und verifiziert.
 
 ## 2026-05-04 - M4 Integrierter Wissensbasis-Chat
 
 ### Status
 
 - Noch nicht implementiert.
-- Start bleibt blockiert, bis M3c hart abgeschlossen ist.
+- Start ist seit dem M3c-Abschluss vom 2026-05-05 freigegeben.
 
 ### Open
 

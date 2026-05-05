@@ -1,34 +1,66 @@
 # RAG
 
-Stand: 2026-05-04
+Stand: 2026-05-05
 
 Dieses Dokument ist der kurze Einstiegspunkt fuer den aktuellen Stand von Chat/RAG.
 
-Es beschreibt den Stand der M3c Chat/RAG Foundation, nicht einen bereits integrierten Produkt-Chat im Sinne von M4.
+Es beschreibt den abgeschlossenen Stand der M3c Chat/RAG Foundation. M3c liefert den stabilen Antwortpfad ueber Chat-API, Retrieval, Kontextbau, Prompting, Policy, Fake-LLM-Testprovider, Citation Mapping und Persistenz. M4 bleibt die naechste Ausbaustufe fuer produktive LLM-Provider, Streaming, erweiterte Chat-Funktionen und Analyseintegration.
 
 ## Implementiert
 
 - RAG-Datenfluss ist dokumentiert.
 - Chat/RAG-API-Vertrag ist dokumentiert.
+- Chat-HTTP-API unter `/api/v1/chat/...` ist implementiert.
+- `POST /api/v1/chat/sessions/{session_id}/messages` ist mit dem RAG-Orchestrator verdrahtet.
+- `RagChatService` orchestriert Persistenz, Retrieval, Context Builder, Insufficient-Context-Policy, Prompt Builder, LLM Provider, Citation Mapper und Assistant-Persistenz.
 - Context Builder ist implementiert.
 - Prompt Builder ist implementiert.
 - Citation Mapper ist implementiert.
 - Insufficient-Context-Policy ist implementiert.
 - Chat-Persistenz fuer Sessions, Messages und Citations ist implementiert.
-- Chat-UI ist gegen den dokumentierten Vertrag implementiert.
+- Fake LLM Provider fuer deterministische Tests ist implementiert.
+- Chat-UI ist gegen den echten Backend-Vertrag implementiert.
+- API-, Service- und Frontend-Tests fuer M3c sind vorhanden.
 
-## Noch nicht hart abgeschlossen
+## Antwortpfad
 
-- stabile Backend-HTTP-Endpoints fuer `/api/v1/chat/...`
-- end-to-end RAG-Antwortpfad ueber Retrieval -> Kontext -> Prompt -> Policy -> LLM -> Citations -> API
-- API-Tests fuer Chat-Endpunkte
-- echte Integrationsnachweise fuer den Chat/RAG-Flow
+Der erfolgreiche M3c-Flow:
+
+1. User-Frage wird als Chat-Message gespeichert.
+2. Retrieval sucht Chunks ueber den Search-Service.
+3. Context Builder erzeugt ein deterministisches Kontextpaket.
+4. Insufficient-Context-Policy bricht ab, wenn der Kontext nicht belastbar ist.
+5. Prompt Builder erzeugt System- und User-Prompt.
+6. LLM Provider wird nur bei ausreichendem Kontext aufgerufen.
+7. Assistant-Antwort wird gespeichert.
+8. Citations werden aus Chunk-Referenzen in der Antwort abgeleitet und persistiert.
+9. API liefert eine `ChatMessageResponse` fuer die Assistant-Antwort inklusive Citations und Confidence.
 
 ## Quellenlogik
 
 - Keine erfolgreiche dokumentgestuetzte Antwort ohne Quellen.
-- Citations muessen mindestens `chunk_id`, `document_id`, `document_title`, `source_anchor` und `quote_preview` enthalten.
-- Insufficient-Context-Antworten duerfen keine freie Halluzinationsantwort erzeugen.
+- Citations muessen mindestens `chunk_id`, `document_id`, `source_anchor` und optional `quote_preview` enthalten.
+- Eine Assistant-Antwort ohne Chunk-Referenz wird als `INSUFFICIENT_CONTEXT` verworfen.
+- Insufficient-Context-Faelle erzeugen keine freie Assistant-Antwort und rufen keinen LLM Provider auf.
+
+## Fehlerverhalten
+
+Alle Fehler verwenden das API-Error-Envelope.
+
+| Code | Bedeutung |
+|---|---|
+| `CHAT_SESSION_NOT_FOUND` | Session existiert nicht |
+| `CHAT_MESSAGE_INVALID` | Request ist ungueltig, z.B. leere Frage |
+| `CHAT_PERSISTENCE_FAILED` | Persistenzfehler beim Speichern |
+| `RETRIEVAL_FAILED` | Retrieval-Service ist fehlgeschlagen |
+| `INSUFFICIENT_CONTEXT` | Kontext reicht nicht fuer eine belegte Antwort |
+| `LLM_UNAVAILABLE` | LLM Provider ist nicht verfuegbar oder liefert keine Antwort |
+
+## Verifikation
+
+- Chat-API, Schemas, RAG-Service, Fake LLM Provider und Chat-Persistenz: `74 passed` im fokussierten Backend-Lauf.
+- Frontend ChatPage und alle Frontend-Screen-Tests: `14 passed`.
+- Frontend-Build: erfolgreich.
 
 ## Referenzen
 
@@ -38,11 +70,13 @@ Es beschreibt den Stand der M3c Chat/RAG Foundation, nicht einen bereits integri
 
 ## Abschlussstand
 
-- Fachlicher Fortschritt: deutlich
-- Harter Abschluss: noch offen
-- Entscheidung fuer M4: `No-Go`
+- Fachlicher Fortschritt: abgeschlossen fuer M3c Foundation
+- Harter Abschluss: bestanden
+- Score: `94/100`
+- Entscheidung fuer M4: `Go`
 
 ## Abgrenzung zu M4
 
-- M3c liefert Bausteine, Persistenz und GUI-Vertrag.
-- M4 beginnt erst mit einer stabilen Chat-HTTP-API und einem echten integrierten Antwortpfad.
+- M3c liefert Foundation, stabilen API-Pfad, Fake-LLM-Testbarkeit und Quellenpflicht.
+- M4 ersetzt den Fake-/unconfigured Provider durch einen produktiven LLM Provider und erweitert den Chat fachlich.
+- Streaming, Agenten, Tool Use, Dokumentmutation, Embeddings und Analysefunktionen bleiben ausserhalb von M3c.

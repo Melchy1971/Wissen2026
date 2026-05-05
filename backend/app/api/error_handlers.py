@@ -4,7 +4,13 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.core.errors import ApiError, InvalidPaginationApiError, InvalidQueryApiError, WorkspaceRequiredApiError
+from app.core.errors import (
+    ApiError,
+    ChatMessageInvalidApiError,
+    InvalidPaginationApiError,
+    InvalidQueryApiError,
+    WorkspaceRequiredApiError,
+)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -33,8 +39,16 @@ def map_validation_error(exc: RequestValidationError) -> ApiError:
     errors = exc.errors()
     for error in errors:
         location = tuple(error.get("loc", ()))
-        if location == ("query", "workspace_id"):
+        if location in {("query", "workspace_id"), ("body", "workspace_id")}:
             return WorkspaceRequiredApiError(details={"errors": errors})
+        if location in {
+            ("body", "content"),
+            ("body", "question"),
+            ("body", "role"),
+            ("body", "basis_type"),
+            ("body", "retrieval_limit"),
+        }:
+            return ChatMessageInvalidApiError(details={"errors": errors})
         if location == ("query", "q"):
             return InvalidQueryApiError(details={"errors": errors})
     for error in errors:

@@ -1,6 +1,6 @@
 # Wissensbasis V1 - Masterplan
 
-**Stand:** 2026-05-04  
+**Stand:** 2026-05-05  
 **Ground Truth:** Code und Migrationen sind verbindlich. Dokumentation beschreibt den Stand, entscheidet ihn aber nicht.  
 **Ziel:** Eine robuste Wissensbasis, in der Dokumente importiert, normalisiert, versioniert, als Chunks lesbar gemacht, spaeter durchsucht und im Chat/Analysekontext verwendet werden koennen.
 
@@ -28,8 +28,8 @@ V1 bleibt Single-User ohne Authentifizierung. Workspace- und User-Felder sind da
 | Fehlerstandard | einheitliches API-Error-Envelope | ✅ implementiert fuer Paket-5-Pfade |
 | OCR | explizit nicht Teil von Paket 5 | fehlt |
 | GUI-Start | M3a erst nach erfolgreichem Paket-5-Gate mit Score >= 90 | ✅ gestartet und als read-only GUI-Basis umgesetzt |
-| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | teilweise implementiert, aber noch nicht hart abgeschlossen |
-| Chat | nach M3 | teilweise implementiert, aber noch nicht hart abgeschlossen |
+| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | M3b implementiert und ueber PostgreSQL-Tests abgesichert |
+| Chat | nach M3 | ✅ M3c Chat/RAG Foundation abgeschlossen |
 | Analyse | nach Chat/Retrieval-Grundlage | vorbereitet im Datenmodell, Fachlogik fehlt |
 | Vektorsuche | optional, nicht V1-kritisch | fehlt |
 | Backup/Restore | spaeterer Betriebsmeilenstein | fehlt |
@@ -161,7 +161,7 @@ Noch zu vereinheitlichen:
 
 ### Frontend
 
-React/Vite ist die gesetzte V1-GUI-Basis. Der GUI-Start war bewusst an das Paket-5-Gate gekoppelt und wurde danach fuer M3a umgesetzt. Aktuell existieren eine read-only Dokument-GUI, eine Retrieval-Suche in der Dokumentansicht und eine Chat-Oberflaeche auf Vertragsbasis; der harte Abschluss fuer Retrieval und Chat haengt weiter an den noch offenen Backend- und Integrationsnachweisen.
+React/Vite ist die gesetzte V1-GUI-Basis. Der GUI-Start war bewusst an das Paket-5-Gate gekoppelt und wurde danach fuer M3a umgesetzt. Aktuell existieren eine read-only Dokument-GUI, eine Retrieval-Suche in der Dokumentansicht und eine Chat-Oberflaeche gegen die echte Chat/RAG-API. M3c ist als Foundation abgeschlossen; M4 erweitert diese Grundlage um produktiven LLM-Betrieb.
 
 ### Datenbank
 
@@ -495,7 +495,7 @@ Erlaubte Typen:
 
 ## M3b - Retrieval Foundation
 
-**Status:** partial.
+**Status:** implemented.
 
 **Ziel:** Such- und Retrieval-Basis auf Chunk-Ebene einfuehren, ohne Chat, LLM-Antwortgenerierung oder semantische Suche vorzuziehen.
 
@@ -572,15 +572,14 @@ Erlaubte Typen:
 - ✅ GUI-Suche auf `/documents` ist implementiert.
 - ✅ Lade-, Leer- und Fehlerzustaende fuer Suche sind sichtbar.
 - ✅ Failure-Mode-Matrix und minimales Evaluation-Dataset sind dokumentiert.
-- Offen fuer harten Abschluss:
-  - PostgreSQL-Integrationsnachweis fuer echte Suchtreffer und Filterung.
-  - Ranking-Regressionstest fuer stabile Reihenfolge.
+- PostgreSQL-Integrationsnachweis fuer echte Suchtreffer und Filterung ist vorhanden.
+- Ranking-Regressionstest fuer stabile Reihenfolge ist vorhanden.
 
-### Vorlaeufige Entscheidung
+### Entscheidung
 
-- M3b ist fachlich weitgehend umgesetzt, aber noch nicht hart abgeschlossen.
-- Score: `88/100`
-- Go fuer M3c Chat/RAG: `No-Go`
+- M3b ist abgeschlossen.
+- Score: `92/100`
+- Go fuer M3c Chat/RAG: `Go`
 
 ### Akzeptanzkriterien
 
@@ -603,7 +602,7 @@ Erlaubte Typen:
 
 ## M3c - Chat/RAG Foundation
 
-**Status:** partial.
+**Status:** implemented.
 
 **Ziel:** Die Chat-/RAG-Grundlage bereitstellen, damit Fragen spaeter ueber Retrieval-Kontext beantwortet, Quellen maschinenlesbar zugeordnet und unzureichender Kontext deterministisch abgefangen werden kann.
 
@@ -617,6 +616,9 @@ Erlaubte Typen:
 - Chat-Session-, Message- und Citation-Persistenz implementieren.
 - Frontend-Chatseite gegen den Zielvertrag anbinden.
 - Tests fuer Halluzinationsschutz, Persistenz und Quellenlogik ergaenzen.
+- RagChatService fuer den integrierten Antwortpfad implementieren.
+- Fake LLM Provider fuer deterministische Tests implementieren.
+- Chat-API- und Frontend-Tests gegen den echten Vertrag abschliessen.
 
 ### Aktueller Abschlussstand
 
@@ -628,21 +630,22 @@ Erlaubte Typen:
 - ✅ Chat-Session-, Message- und Citation-Persistenz ist implementiert.
 - ✅ Frontend-Chatseite ist implementiert.
 - ✅ Fokustests fuer die neuen M3c-Bausteine sind vorhanden.
-- Offen fuer harten Abschluss:
-  - stabile Backend-HTTP-API fuer Chat-Sessions und Messages
-  - end-to-end Retrieval-Integration ueber echten Antwortpfad
-  - API-Tests fuer Chat-Endpunkte
+- Chat-HTTP-API fuer Sessions und Messages ist implementiert.
+- Message API ist mit `RagChatService` verdrahtet.
+- End-to-End-RAG-Flow ueber echten API-Pfad ist mit Fake LLM getestet.
+- Fehlercodes fuer Chat/RAG sind implementiert und getestet.
+- Frontend ist gegen den echten Chat-Vertrag aktualisiert.
 
-### Vorlaeufige Entscheidung
+### Finale Entscheidung
 
-- M3c Chat/RAG Foundation ist fachlich deutlich vorangekommen, aber nicht hart abgeschlossen.
-- Score: `74/100`
-- Go fuer M4-Folgearbeit: `No-Go`
+- M3c Chat/RAG Foundation ist abgeschlossen.
+- Score: `94/100`
+- Go fuer M4-Folgearbeit: `Go`
 
 ### Begruendung
 
-- Die Kernbausteine und die GUI sind vorhanden.
-- Der fehlende HTTP- und Integrationsnachweis verhindert derzeit einen belastbaren Abschluss.
+- Die Kernbausteine, stabile API, RAG-Orchestrierung, Fehlerstandard, Fake-LLM-Testbarkeit und GUI-Vertrag sind vorhanden und getestet.
+- Produktiver LLM Provider, Streaming, Agenten, Tool Use, Embeddings und Dokumentmutation bleiben ausserhalb von M3c.
 
 ### Akzeptanzkriterien
 
@@ -653,11 +656,15 @@ Erlaubte Typen:
 - Chat-Sessions, Messages und Citations sind persistierbar.
 - Die Chat-GUI kann Sessionliste, Verlauf, Antworten, Citations und Insufficient-Context-Zustaende darstellen.
 
-### Nicht abgeschlossen
+### M3c-Nicht-Scope
 
-- stabile Backend-HTTP-API fuer Chat-Sessions und Messages
-- end-to-end RAG-Antwortpfad ueber echten API-Flow
-- API-Tests fuer Chat-Endpunkte
+- produktiver LLM Provider
+- Streaming
+- Agenten
+- Tool Use
+- Dokumentmutation
+- Embeddings
+- Analyse- und Commit-Funktionen
 
 ---
 
@@ -669,9 +676,10 @@ Erlaubte Typen:
 
 ### Tasks
 
-- Chat-Service mit Retrieval-Schritt ueber stabilen HTTP-Pfad bereitstellen.
-- LLM-Orchestrierung an Prompt Builder und Policy anbinden.
-- Quellenpflicht im produktiven Antwortpfad durchsetzen.
+- Produktiven LLM Provider an den bestehenden Provider-Vertrag anbinden.
+- Provider-Konfiguration, Timeout-Handling und Betriebsfehler haerten.
+- Optional Streaming-Vertrag definieren.
+- Chat-Service um produktive Betriebsfaehigkeit erweitern, ohne die M3c-Quellenpflicht aufzuweichen.
 - Kennzeichnung fuer Antworten ausserhalb der Wissensbasis im API- und UI-Flow absichern.
 - Dokumentvergleich im Chat.
 - API- und Integrationsnachweise fuer den produktiven Antwortpfad.
@@ -745,9 +753,9 @@ Erlaubte Typen:
 4. Offene M3a-Testluecken fuer finalen GUI-Abschluss schliessen.
 5. PostgreSQL-Integrationsnachweis fuer M3b-Suchtreffer, Filterung und Ranking ergaenzen.
 6. Ranking-Regressionstest fuer M3b einfuehren.
-7. Stabile Chat-HTTP-API fuer M3c implementieren.
-8. End-to-End-RAG-Pfad ueber echten API-Flow verdrahten und testen.
-9. Erst danach M4 auf der verifizierten M3c-Grundlage starten.
+7. Produktiven LLM Provider fuer M4 an den bestehenden Provider-Vertrag anbinden.
+8. Betriebsgrenzen fuer M4 definieren: Timeout, Retry, Logging, Provider-Konfiguration.
+9. M4 auf der verifizierten M3c-Grundlage starten.
 
 ---
 
@@ -762,7 +770,7 @@ Erlaubte Typen:
 | `/api/v1/documents` Alias fehlt | M3 koennte spaeter auf unversionierten Pfad koppeln | Alias vor M3-Clientbindung implementieren |
 | Import-Persistenz nutzt direkten `psycopg` | uneinheitliche DB-Schicht | nach Paket 5 in Repository-/Session-Struktur ueberfuehren |
 | PostgreSQL-Tests optional | DB-spezifische Fehler koennen unbemerkt bleiben | `TEST_DATABASE_URL` in CI setzen |
-| Allgemeiner Chat halluziniert | falsche Antworten | M4 erst nach M3, Quellenpflicht und Antwortstatus erzwingen |
+| Allgemeiner Chat halluziniert | falsche Antworten | M3c-Quellenpflicht beibehalten, M4-Provider nur hinter Policy und Citation-Gate betreiben |
 | Remote-DB-Latenz | langsame Suche/Importe | Indizes, Projektionen, Pagination und Batch-Strategien |
 
 ---

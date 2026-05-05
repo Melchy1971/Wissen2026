@@ -32,6 +32,7 @@ function mapErrorTitle(code) {
     INVALID_QUERY: 'Ungueltige Suche',
     INVALID_PAGINATION: 'Ungueltige Pagination',
     QUERY_REQUIRED: 'Frage fehlt',
+    CHAT_MESSAGE_INVALID: 'Ungueltige Chat-Frage',
     INSUFFICIENT_CONTEXT: 'Zu wenig Kontext',
     LLM_UNAVAILABLE: 'LLM nicht verfuegbar',
     RETRIEVAL_FAILED: 'Retrieval fehlgeschlagen',
@@ -212,10 +213,16 @@ export function mapChatSessionDetail(item) {
   };
 }
 
-export function mapPostedChatResponse(item) {
+export function mapPostedChatResponse(item, { question } = {}) {
   return {
     sessionId: item.session_id,
-    userMessage: mapChatMessage(item.user_message),
-    assistantMessage: mapChatMessage(item.assistant_message),
+    userMessage: mapChatMessage({
+      id: `local-user-${item.session_id}-${item.id}`,
+      session_id: item.session_id,
+      role: 'user',
+      content: question || '',
+      created_at: new Date().toISOString(),
+    }),
+    assistantMessage: mapChatMessage(item),
   };
 }
