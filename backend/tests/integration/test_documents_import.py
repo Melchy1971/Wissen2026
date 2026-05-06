@@ -81,11 +81,8 @@ def test_parallel_duplicate_imports_create_single_document(monkeypatch) -> None:
     test_database_url = require_test_database_url()
     monkeypatch.setattr(settings, "database_url", test_database_url)
     config = make_alembic_config()
-    try:
-        command.downgrade(config, "base")
-        command.upgrade(config, "head")
-    except Exception as exc:
-        pytest.skip(f"Skipping PostgreSQL duplicate race test because migration prerequisites are unavailable: {exc}")
+    command.downgrade(config, "base")
+    command.upgrade(config, "head")
 
     original_fetch_existing = DocumentImportPersistenceService._fetch_existing
     barrier = Barrier(2)
@@ -137,6 +134,7 @@ def test_parallel_duplicate_imports_create_single_document(monkeypatch) -> None:
 
         assert {payload["document_id"] for payload in payloads}
         assert len({payload["document_id"] for payload in payloads}) == 1
+        assert sorted(payload["import_status"] for payload in payloads) == ["chunked", "duplicate"]
         assert sum(1 for payload in payloads if payload["duplicate_of_document_id"] is None) == 1
         assert sum(1 for payload in payloads if payload["duplicate_of_document_id"] == payload["document_id"]) == 1
 

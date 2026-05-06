@@ -39,3 +39,16 @@ und fuehrt anschliessend wieder ein Downgrade auf `base` aus. Die URL wird im Te
 Der optionale Import-Integrationstest nutzt dieselbe Voraussetzung und prueft `POST /documents/import`
 fuer TXT/Markdown inklusive Dokumentversionen, Chunks und Duplikaterkennung. Auch dieser Test setzt
 die Testdatenbank zurueck.
+
+Der parallele Duplicate-Race-Test in `tests/integration/test_documents_import.py`
+ist nur dann ein Skip, wenn `TEST_DATABASE_URL` fehlt. Sobald `TEST_DATABASE_URL` gesetzt ist,
+muessen Alembic-`downgrade`/`upgrade` erfolgreich laufen; Migrationsfehler sind Testfehler und
+keine Skip-Bedingung.
+
+Lokaler Lauf gegen die dedizierte PostgreSQL-Testdatenbank:
+
+```bash
+cd backend
+$env:TEST_DATABASE_URL="postgresql://testuser:testpass@localhost:5433/wissen_test"
+pytest tests/integration/test_documents_import.py -v
+```

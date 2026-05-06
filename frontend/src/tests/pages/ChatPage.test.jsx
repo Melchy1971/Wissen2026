@@ -2,16 +2,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthProvider } from '../../auth/AuthContext.jsx';
 import { ChatPage } from '../../pages/ChatPage.jsx';
 
-function renderPage(initialEntry = '/chat/session-1?workspace_id=workspace-1') {
+function renderPage(initialEntry = '/chat/session-1') {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path="/chat" element={<ChatPage />} />
-        <Route path="/chat/:id" element={<ChatPage />} />
-      </Routes>
-    </MemoryRouter>
+    <AuthProvider initialAuthState={{ token: 'test-token', user: null, active_workspace_id: 'workspace-1', memberships: [] }}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:id" element={<ChatPage />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
   );
 }
 
@@ -164,7 +167,7 @@ describe('ChatPage', () => {
         }),
       });
 
-    renderPage('/chat?workspace_id=workspace-1');
+    renderPage('/chat');
 
     expect(await screen.findByText('Keine Chat-Sitzungen vorhanden')).toBeInTheDocument();
 
@@ -190,10 +193,16 @@ describe('ChatPage', () => {
 
     const messageRequest = JSON.parse(globalThis.fetch.mock.calls.at(-1)[1].body);
     expect(messageRequest).toEqual({
-      workspace_id: 'workspace-1',
       question: 'Welche Frist gilt?',
       retrieval_limit: 8,
     });
+    expect(globalThis.fetch.mock.calls.at(-1)[1].headers).toEqual(
+      expect.objectContaining({
+        Authorization: 'Bearer test-token',
+        'Content-Type': 'application/json',
+        'X-Workspace-Id': 'workspace-1',
+      }),
+    );
   });
 
   it('renders insufficient context with exact error format', async () => {
@@ -263,7 +272,7 @@ describe('ChatPage', () => {
       json: async () => ({ error: { code, message: `${code} message`, details: {} } }),
     });
 
-    renderPage('/chat?workspace_id=workspace-1');
+    renderPage('/chat');
 
     await waitFor(() => {
       expect(screen.getByText(title)).toBeInTheDocument();

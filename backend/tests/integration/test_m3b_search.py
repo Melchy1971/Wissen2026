@@ -10,10 +10,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
+from app.api.v1 import admin as admin_api
+from app.api.v1 import chat as chat_api
 from app.api.v1 import search as search_api
 from app.core.config import settings
 from app.main import app
 from app.services.auth import hash_password, hash_token
+from app.services.chat.citation_mapper import CitationMapper
+from app.services.chat.context_builder import ContextBuilder
+from app.services.chat.fake_llm_provider import FakeLlmProvider
+from app.services.chat.insufficient_context_policy import InsufficientContextPolicy
+from app.services.chat.persistence_service import ChatPersistenceService
+from app.services.chat.prompt_builder import PromptBuilder
+from app.services.chat.rag_chat_service import RagChatService
 from app.services.search_index_service import SearchIndexRebuildService
 from app.services.search_service import SearchService
 from tests.integration.test_migrations import make_alembic_config, psycopg_url
@@ -75,6 +84,20 @@ CHUNK_RANK_INDEX_0_ID = "e4100000-0000-0000-0000-000000000004"
 CHUNK_RANK_INDEX_1_ID = "e4100000-0000-0000-0000-000000000005"
 CHUNK_RANK_ID_LOW     = "e4100000-0000-0000-0000-000000000006"
 CHUNK_RANK_ID_HIGH    = "e4100000-0000-0000-0000-000000000007"
+
+DOC_LIFECYCLE_ACTIVE_ID = "e2200000-0000-0000-0000-000000000001"
+DOC_LIFECYCLE_ARCHIVED_ID = "e2200000-0000-0000-0000-000000000002"
+DOC_LIFECYCLE_DELETED_ID = "e2200000-0000-0000-0000-000000000003"
+
+VER_LIFECYCLE_ACTIVE_ID = "e3200000-0000-0000-0000-000000000001"
+VER_LIFECYCLE_ARCHIVED_ID = "e3200000-0000-0000-0000-000000000002"
+VER_LIFECYCLE_DELETED_ID = "e3200000-0000-0000-0000-000000000003"
+
+CHUNK_LIFECYCLE_ACTIVE_ID = "e4200000-0000-0000-0000-000000000001"
+CHUNK_LIFECYCLE_ARCHIVED_ID = "e4200000-0000-0000-0000-000000000002"
+CHUNK_LIFECYCLE_DELETED_ID = "e4200000-0000-0000-0000-000000000003"
+
+LIFECYCLE_SHARED_TERM = "lifecycleretrievalterm"
 
 RANKING_QUERY = "rankingterm orderterm"
 RANKING_BASE_CONTENT = "rankingterm orderterm baseline"
@@ -413,6 +436,123 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
     conn.commit()
 
 
+def _insert_lifecycle_retrieval_data(conn: psycopg.Connection) -> None:
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            INSERT INTO documents
+                (id, workspace_id, owner_user_id, current_version_id,
+                 title, source_type, mime_type, content_hash, import_status,
+                 lifecycle_status, archived_at, deleted_at, created_at, updated_at)
+            VALUES
+                (%s::uuid, %s::uuid, %s::uuid, NULL,
+                 %s, 'upload', 'text/plain', %s, 'pending',
+                 'active', NULL, NULL, now(), now())
+            """,
+            [
+                (DOC_LIFECYCLE_ACTIVE_ID, WORKSPACE_ID, USER_ID, "Lifecycle Active", "hash-lifecycle-active"),
+                (DOC_LIFECYCLE_ARCHIVED_ID, WORKSPACE_ID, USER_ID, "Lifecycle Archived", "hash-lifecycle-archived"),
+                (DOC_LIFECYCLE_DELETED_ID, WORKSPACE_ID, USER_ID, "Lifecycle Deleted", "hash-lifecycle-deleted"),
+            ],
+        )
+
+        cur.executemany(
+            """
+            INSERT INTO document_versions
+                (id, document_id, version_number, normalized_markdown, markdown_hash,
+                 parser_version, ocr_used, ki_provider, ki_model, metadata, created_at)
+            VALUES
+                (%s::uuid, %s::uuid, 1, %s, %s,
+                 '1.0', false, NULL, NULL, '{}'::jsonb, now())
+            """,
+            [
+                (
+                    VER_LIFECYCLE_ACTIVE_ID,
+                    DOC_LIFECYCLE_ACTIVE_ID,
+                    f"# Active\n\n{LIFECYCLE_SHARED_TERM} active retrieval source",
+                    "md-hash-lifecycle-active",
+                ),
+                (
+                    VER_LIFECYCLE_ARCHIVED_ID,
+                    DOC_LIFECYCLE_ARCHIVED_ID,
+                    f"# Archived\n\n{LIFECYCLE_SHARED_TERM} archived retrieval source",
+                    "md-hash-lifecycle-archived",
+                ),
+                (
+                    VER_LIFECYCLE_DELETED_ID,
+                    DOC_LIFECYCLE_DELETED_ID,
+                    f"# Deleted\n\n{LIFECYCLE_SHARED_TERM} deleted retrieval source",
+                    "md-hash-lifecycle-deleted",
+                ),
+            ],
+        )
+
+        cur.executemany(
+            "UPDATE documents SET current_version_id = %s::uuid, import_status = 'chunked' WHERE id = %s::uuid",
+            [
+                (VER_LIFECYCLE_ACTIVE_ID, DOC_LIFECYCLE_ACTIVE_ID),
+                (VER_LIFECYCLE_ARCHIVED_ID, DOC_LIFECYCLE_ARCHIVED_ID),
+                (VER_LIFECYCLE_DELETED_ID, DOC_LIFECYCLE_DELETED_ID),
+            ],
+        )
+
+        cur.executemany(
+            """
+            INSERT INTO document_chunks
+                (id, document_id, document_version_id, chunk_index,
+                 heading_path, anchor, content, is_searchable, content_hash,
+                 token_estimate, metadata, created_at)
+            VALUES
+                (%s::uuid, %s::uuid, %s::uuid, 0,
+                 '[]'::jsonb, %s, %s, %s, md5(%s),
+                 NULL, %s::jsonb, now())
+            """,
+            [
+                (
+                    CHUNK_LIFECYCLE_ACTIVE_ID,
+                    DOC_LIFECYCLE_ACTIVE_ID,
+                    VER_LIFECYCLE_ACTIVE_ID,
+                    "anchor-lifecycle-active",
+                    f"{LIFECYCLE_SHARED_TERM} active retrieval source remains visible",
+                    True,
+                    f"{LIFECYCLE_SHARED_TERM} active retrieval source remains visible",
+                    _NULL_SOURCE_ANCHOR,
+                ),
+                (
+                    CHUNK_LIFECYCLE_ARCHIVED_ID,
+                    DOC_LIFECYCLE_ARCHIVED_ID,
+                    VER_LIFECYCLE_ARCHIVED_ID,
+                    "anchor-lifecycle-archived",
+                    f"{LIFECYCLE_SHARED_TERM} archived retrieval source must stay hidden",
+                    False,
+                    f"{LIFECYCLE_SHARED_TERM} archived retrieval source must stay hidden",
+                    _NULL_SOURCE_ANCHOR,
+                ),
+                (
+                    CHUNK_LIFECYCLE_DELETED_ID,
+                    DOC_LIFECYCLE_DELETED_ID,
+                    VER_LIFECYCLE_DELETED_ID,
+                    "anchor-lifecycle-deleted",
+                    f"{LIFECYCLE_SHARED_TERM} deleted retrieval source must stay hidden",
+                    False,
+                    f"{LIFECYCLE_SHARED_TERM} deleted retrieval source must stay hidden",
+                    _NULL_SOURCE_ANCHOR,
+                ),
+            ],
+        )
+
+        cur.execute(
+            "UPDATE documents SET lifecycle_status = 'archived', archived_at = now() WHERE id = %s::uuid",
+            (DOC_LIFECYCLE_ARCHIVED_ID,),
+        )
+        cur.execute(
+            "UPDATE documents SET lifecycle_status = 'deleted', deleted_at = now() WHERE id = %s::uuid",
+            (DOC_LIFECYCLE_DELETED_ID,),
+        )
+
+    conn.commit()
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -707,3 +847,115 @@ def test_search_index_rebuild_recreates_missing_index_and_search_still_returns_r
     assert CHUNK_ARCHIVED_ID not in chunk_ids
     assert CHUNK_DELETED_ID not in chunk_ids
     assert "programming language used for software development" not in caplog.text
+
+
+def test_lifecycle_e2e_excludes_archived_deleted_from_search_chat_and_reindex(
+    client: TestClient,
+    pg_engine,
+    test_db_url: str,
+) -> None:
+    with psycopg.connect(psycopg_url(test_db_url)) as conn:
+        _insert_lifecycle_retrieval_data(conn)
+
+    search_response = client.get(
+        "/api/v1/search/chunks",
+        params={"q": LIFECYCLE_SHARED_TERM},
+    )
+
+    assert search_response.status_code == 200
+    search_payload = search_response.json()
+    assert [item["document_id"] for item in search_payload] == [DOC_LIFECYCLE_ACTIVE_ID]
+    assert [item["chunk_id"] for item in search_payload] == [CHUNK_LIFECYCLE_ACTIVE_ID]
+
+    provider = FakeLlmProvider()
+
+    def override_rag_chat_service() -> Iterator[RagChatService]:
+        with Session(pg_engine) as session:
+            yield RagChatService(
+                persistence=ChatPersistenceService.from_session(session),
+                retrieval=SearchService.from_session(session),
+                context_builder=ContextBuilder(max_context_chars=12000, max_context_tokens=2500, min_chunk_chars=40),
+                insufficient_context_policy=InsufficientContextPolicy(),
+                prompt_builder=PromptBuilder(),
+                llm_provider=provider,
+                citation_mapper=CitationMapper(),
+                retrieval_limit=8,
+            )
+
+    app.dependency_overrides[chat_api.get_rag_chat_service] = override_rag_chat_service
+    try:
+        session_response = client.post(
+            "/api/v1/chat/sessions",
+            json={"title": "Lifecycle Retrieval Check"},
+        )
+        assert session_response.status_code == 201
+        session_id = session_response.json()["id"]
+
+        chat_response = client.post(
+            f"/api/v1/chat/sessions/{session_id}/messages",
+            json={"question": LIFECYCLE_SHARED_TERM, "retrieval_limit": 8},
+        )
+    finally:
+        app.dependency_overrides.pop(chat_api.get_rag_chat_service, None)
+
+    assert chat_response.status_code == 201
+    chat_payload = chat_response.json()
+    assert [citation["document_id"] for citation in chat_payload["citations"]] == [DOC_LIFECYCLE_ACTIVE_ID]
+    assert [citation["chunk_id"] for citation in chat_payload["citations"]] == [CHUNK_LIFECYCLE_ACTIVE_ID]
+    assert [citation["source_status"] for citation in chat_payload["citations"]] == ["active"]
+    assert len(provider.calls) == 1
+    assert f"chunk_id: {CHUNK_LIFECYCLE_ACTIVE_ID}" in provider.calls[0].user_prompt
+    assert CHUNK_LIFECYCLE_ARCHIVED_ID not in provider.calls[0].user_prompt
+    assert CHUNK_LIFECYCLE_DELETED_ID not in provider.calls[0].user_prompt
+
+    with psycopg.connect(psycopg_url(test_db_url)) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE document_chunks
+                SET is_searchable = true
+                WHERE id IN (%s::uuid, %s::uuid)
+                """,
+                (CHUNK_LIFECYCLE_ARCHIVED_ID, CHUNK_LIFECYCLE_DELETED_ID),
+            )
+        conn.commit()
+
+    rebuild_response = client.post("/api/v1/admin/search-index/rebuild")
+    assert rebuild_response.status_code == 202
+    job_id = rebuild_response.json()["id"]
+
+    job_response = client.get(f"/api/v1/jobs/{job_id}")
+    assert job_response.status_code == 200
+    job_payload = job_response.json()
+    assert job_payload["status"] == "completed"
+    assert job_payload["result"]["status"] == "completed"
+
+    with psycopg.connect(psycopg_url(test_db_url)) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, is_searchable
+                FROM document_chunks
+                WHERE id IN (%s::uuid, %s::uuid, %s::uuid)
+                ORDER BY id ASC
+                """,
+                (
+                    CHUNK_LIFECYCLE_ACTIVE_ID,
+                    CHUNK_LIFECYCLE_ARCHIVED_ID,
+                    CHUNK_LIFECYCLE_DELETED_ID,
+                ),
+            )
+            rows = cur.fetchall()
+
+    assert rows == [
+        (CHUNK_LIFECYCLE_ACTIVE_ID, True),
+        (CHUNK_LIFECYCLE_ARCHIVED_ID, False),
+        (CHUNK_LIFECYCLE_DELETED_ID, False),
+    ]
+
+    search_after_reindex = client.get(
+        "/api/v1/search/chunks",
+        params={"q": LIFECYCLE_SHARED_TERM},
+    )
+    assert search_after_reindex.status_code == 200
+    assert [item["document_id"] for item in search_after_reindex.json()] == [DOC_LIFECYCLE_ACTIVE_ID]

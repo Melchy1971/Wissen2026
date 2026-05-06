@@ -2,16 +2,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthProvider } from '../../auth/AuthContext.jsx';
 import { setApiRequestContext } from '../../api/client.js';
 import { DocumentsPage } from '../../pages/DocumentsPage.jsx';
 
-function renderPage(initialEntry = '/documents?workspace_id=workspace-1') {
+function renderPage(initialEntry = '/documents') {
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path="/documents" element={<DocumentsPage />} />
-      </Routes>
-    </MemoryRouter>
+    <AuthProvider initialAuthState={{ token: 'test-token', user: null, active_workspace_id: 'workspace-1', memberships: [] }}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/documents" element={<DocumentsPage />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
   );
 }
 
@@ -154,7 +157,7 @@ describe('DocumentsPage', () => {
     expect(screen.getByText(/Quelle: text \| Zeichen 10-42/i)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Vertragsentwurf' })[0]).toHaveAttribute(
       'href',
-      '/documents/doc-1?workspace_id=workspace-1',
+      '/documents/doc-1',
     );
     expect(globalThis.fetch).toHaveBeenNthCalledWith(
       2,

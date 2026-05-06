@@ -10,7 +10,7 @@ Nachweisbar implementiert:
 
 - einheitliches API-Fehlerformat
 - Fehlercodes `AUTH_REQUIRED`, `ADMIN_REQUIRED`, `WORKSPACE_REQUIRED`
-- Admin-Schutz fuer `POST /api/v1/admin/search-index/rebuild` ueber `x-admin-token`
+- Admin-Schutz fuer `POST /api/v1/admin/search-index/rebuild` ueber Session + Workspace-Membership/Rolle
 - serverseitig gesetzter Default-Kontext fuer `POST /documents/import`
 - Workspace-Filter in Dokument-, Search- und Chat-Vertraegen
 
@@ -20,16 +20,14 @@ Nicht nachweisbar implementiert:
 - `POST /auth/logout`
 - `GET /auth/me`
 - Cookie-Session oder JWT-Flow fuer regulare Fachendpunkte
-- `workspace_memberships`
-- `auth_sessions`
 - serverseitige Membership-Pruefung fuer Dokument-, Search- und Chat-Endpunkte
 - CSRF-Schutz fuer mutierende Cookie-basierte Requests
 
 ## Auth-Modell im aktuellen Stand
 
-- Regulare Benutzer-Authentifizierung ist im Code nicht nachweisbar.
-- Der einzige klar geschuetzte Endpoint ist der Admin-Rebuild mit `x-admin-token`.
-- Uploads laufen weiterhin mit `settings.default_workspace_id` und `settings.default_user_id`.
+- Regulare Benutzer-Authentifizierung und Workspace-Memberships sind fuer Fachendpunkte im Code nachweisbar.
+- Der Admin-Rebuild nutzt denselben serverseitigen Auth-Kontext und verlangt eine Workspace-Rolle `owner` oder `admin`.
+- Ein gesendeter `x-admin-token`-Header ist kein Autorisierungsmechanismus mehr und gilt nur noch als Legacy-Eingabe ohne Rechtewirkung.
 
 ## Workspace-Isolation im aktuellen Stand
 
@@ -49,8 +47,8 @@ Nicht nachweisbar implementiert:
 
 ## Fehlercodes
 
-- `AUTH_REQUIRED`: Admin-Token fehlt
-- `ADMIN_REQUIRED`: Admin-Token falsch
+- `AUTH_REQUIRED`: keine gueltige Session oder kein Auth-Kontext
+- `ADMIN_REQUIRED`: Session ist vorhanden, aber ohne Adminrolle im aktiven Workspace
 - `WORKSPACE_REQUIRED`: Workspace-Parameter fehlt im Fachrequest
 
 ## Bekannte Einschraenkungen

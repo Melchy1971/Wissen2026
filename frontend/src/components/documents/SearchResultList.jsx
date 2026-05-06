@@ -1,9 +1,6 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 export function SearchResultList({ items, query }) {
-  const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace_id') || '';
-
   return (
     <section className="panel">
       <div className="panel__header search-results__header">
@@ -18,7 +15,7 @@ export function SearchResultList({ items, query }) {
           <li key={item.chunkId} className="stack-list__item stack-list__item--block search-result-card">
             <div className="search-result-card__header">
               <div>
-                <Link to={`/documents/${item.documentId}?workspace_id=${encodeURIComponent(workspaceId)}`}>
+                <Link to={`/documents/${item.documentId}`}>
                   {item.documentTitle}
                 </Link>
                 <p className="state-card__meta">Version {item.versionNumber} | {item.positionLabel}</p>

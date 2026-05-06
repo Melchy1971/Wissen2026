@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { getApiRequestContext } from '../api/client.js';
-import { getDocuments, importDocument, searchChunks } from '../api/documents.js';
+import { useAuth } from '../auth/AuthContext.jsx';
+import { getDocuments, importDocument } from '../api/documents.js';
 import { getJob } from '../api/jobs.js';
+import { searchChunks } from '../api/search.js';
 import { DocumentTable } from '../components/documents/DocumentTable.jsx';
 import { SearchResultList } from '../components/documents/SearchResultList.jsx';
 import { EmptyState } from '../components/status/EmptyState.jsx';
@@ -11,8 +12,7 @@ import { LoadingState } from '../components/status/LoadingState.jsx';
 import { mapDocumentListItem, mapError, mapJobStatus, mapSearchResult } from '../view-models/mappers.js';
 
 export function DocumentsPage() {
-  const requestContext = getApiRequestContext();
-  const workspaceId = requestContext.workspaceId || 'nicht konfiguriert';
+  const { active_workspace_id: workspaceId } = useAuth();
   const [state, setState] = useState({ status: 'loading', items: [], error: null });
   const [searchState, setSearchState] = useState({ status: 'idle', items: [], error: null, query: '' });
   const [uploadState, setUploadState] = useState({ status: 'idle', fileName: '', job: null, result: null, error: null });
@@ -120,7 +120,7 @@ export function DocumentsPage() {
 
     setSearchState({ status: 'loading', items: [], error: null, query });
     try {
-      const response = await searchChunks({ workspaceId, query, limit: 10, offset: 0 });
+      const response = await searchChunks({ query, limit: 10, offset: 0 });
       setSearchState({ status: 'success', items: response.map(mapSearchResult), error: null, query });
     } catch (error) {
       setSearchState({ status: 'error', items: [], error: mapError(error), query });
@@ -147,7 +147,7 @@ export function DocumentsPage() {
           <p className="panel__eyebrow">Dokumentuebersicht</p>
           <h2>Dokumente</h2>
         </div>
-        <p className="page-header__meta">Workspace: {workspaceId}</p>
+        <p className="page-header__meta">Workspace: {workspaceId || 'nicht konfiguriert'}</p>
       </div>
       <section className="panel">
         <div className="panel__header search-bar__header">

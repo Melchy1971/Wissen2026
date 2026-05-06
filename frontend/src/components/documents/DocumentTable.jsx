@@ -1,11 +1,8 @@
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { StatusBadge } from '../status/StatusBadge.jsx';
 
 export function DocumentTable({ items }) {
-  const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace_id') || '';
-
   return (
     <table className="data-table">
       <thead>
@@ -23,7 +20,7 @@ export function DocumentTable({ items }) {
         {items.map((item) => (
           <tr key={item.id}>
             <td>
-              <Link to={`/documents/${item.id}?workspace_id=${encodeURIComponent(workspaceId)}`}>{item.title}</Link>
+              <Link to={`/documents/${item.id}`}>{item.title}</Link>
             </td>
             <td>{item.mimeType}</td>
             <td><StatusBadge status={item.lifecycleStatus} /></td>

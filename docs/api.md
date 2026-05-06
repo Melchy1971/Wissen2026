@@ -10,9 +10,11 @@ Dieses Dokument beschreibt die API-Abhaengigkeit der aktuellen GUI auf hoher Ebe
 
 Der dokumentierte Zielzustand fuer M4a waere ein serverseitig aufgeloester Auth- und Workspace-Kontext. Im vorliegenden Code ist dieser Zustand noch nicht erreicht.
 
+Fuer Admin-Diagnostics ist der Legacy-Header `x-admin-token` nicht mehr Teil des aktiven Frontend-Vertrags. Der Backend-Endpunkt toleriert einen gesendeten Header derzeit nur aus Rueckwaertskompatibilitaet, autorisiert aber ausschliesslich ueber Session + Workspace-Membership/Rolle.
+
 Nachweisbar implementiert:
 
-- `AUTH_REQUIRED` und `ADMIN_REQUIRED` fuer den Admin-Rebuild ueber `x-admin-token`
+- `AUTH_REQUIRED` und `ADMIN_REQUIRED` fuer den Admin-Rebuild ueber serverseitigen Auth-/Membership-Kontext
 - `WORKSPACE_REQUIRED` fuer mehrere fachliche Endpunkte mit explizitem Workspace-Parameter
 - serverseitiger Default-Kontext fuer Uploads statt clientseitig frei uebergebener `workspace_id`
 

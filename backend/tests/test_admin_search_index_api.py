@@ -1,10 +1,12 @@
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 from app.api.v1.admin import get_background_job_service, get_search_index_service
 from app.core.config import settings
 from app.main import app
+from app.models.documents import WorkspaceMembership
 
 
 class FakeBackgroundJobService:
@@ -112,6 +114,16 @@ def test_admin_search_index_rebuild_requires_authentication_even_with_legacy_adm
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "AUTH_REQUIRED"
+
+
+def test_admin_search_index_rebuild_requires_admin_role(client: TestClient, db_session) -> None:
+    db_session.execute(update(WorkspaceMembership).values(role="member"))
+    db_session.commit()
+
+    response = client.post("/api/v1/admin/search-index/rebuild")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "ADMIN_REQUIRED"
 
 
 def test_admin_search_index_rebuild_returns_stable_shape(client: TestClient) -> None:

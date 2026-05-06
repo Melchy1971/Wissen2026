@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { archiveDocument, deleteDocument, getDocumentChunks, getDocumentDetail, getDocumentVersions, restoreDocument } from '../api/documents.js';
 import { ChunkPreviewList } from '../components/documents/ChunkPreviewList.jsx';
@@ -13,8 +13,6 @@ import { mapDocumentDetail, mapError } from '../view-models/mappers.js';
 export function DocumentDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace_id') || '';
   const [state, setState] = useState({ status: 'loading', document: null, error: null });
   const [mutationState, setMutationState] = useState({ status: 'idle', error: null });
 
@@ -74,7 +72,7 @@ export function DocumentDetailPage() {
     setMutationState({ status: 'loading', error: null });
     try {
       await deleteDocument(id);
-      navigate(`/documents${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`);
+      navigate('/documents');
     } catch (error) {
       setMutationState({ status: 'error', error: mapError(error) });
     }
@@ -96,7 +94,7 @@ export function DocumentDetailPage() {
     <div className="page-stack">
       <div className="page-header">
         <div>
-          <Link className="back-link" to={`/documents${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`}>
+          <Link className="back-link" to="/documents">
             Zur Dokumentliste
           </Link>
           <h2>{state.document.title}</h2>

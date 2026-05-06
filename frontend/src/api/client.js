@@ -92,11 +92,12 @@ export class ApiClientError extends Error {
 
 export async function requestJson(path, options = {}) {
   let response;
+  const { headers: optionHeaders = {}, ...requestOptions } = options;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: buildRequestHeaders(options.headers || {}),
-      ...options,
+      ...requestOptions,
+      headers: buildRequestHeaders(optionHeaders),
     });
   } catch (error) {
     throw new ApiClientError({

@@ -306,8 +306,9 @@ Bekannte Einschraenkungen:
 Teststatus fuer M4b am 2026-05-05:
 
 - Pflicht-Uploadtests laufen ohne Skip und decken `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, Parserfehler, OCR-Bedarf, Upload ohne Auth, Upload in fremdem Workspace und sequential duplicate ab.
-- Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist als einziger optionaler Test isoliert.
-- Aktueller Status des PostgreSQL-Race-Tests: im letzten Lauf **nicht gruen**, sondern wegen Connection-Timeout gegen die konfigurierte PostgreSQL-Ziel-Datenbank fehlgeschlagen.
+- Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads bleibt nur dann ein Skip, wenn `TEST_DATABASE_URL` fehlt.
+- Sobald `TEST_DATABASE_URL` gesetzt ist, muessen Alembic-Migrationen erfolgreich laufen; Migrationsfehler sind Testfehler und kein Skip.
+- Verifikationsstand 2026-05-06 aus dieser Arbeitsumgebung: Testsemantik ist gehaertet, aber ein echter PostgreSQL-Lauf war hier nicht abschliessend moeglich, weil Docker lokal nicht verfuegbar war und die dokumentierte Remote-DB mit `psycopg.errors.ConnectionTimeout` nicht erreichbar war.
 
 Abschlussbewertung fuer M4b:
 
@@ -391,7 +392,7 @@ Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-06:
 
 - Real implementiert sind eine Admin-Seite fuer Search-Index-Rebuild, ein Inconsistency-Report, Health-Endpunkte und Observability-Slices.
 - Nicht real implementiert ist der in Teilen der Dokumentation beschriebene aggregierte Backend-Endpunkt `GET /api/v1/admin/diagnostics`.
-- Die aktuelle Admin-GUI arbeitet weiterhin mit manuell eingegebenem `x-admin-token` und bildet damit nicht den Zielzustand von M4a ab.
+- Die Admin-GUI nutzt den zentralen Auth-/Workspace-Kontext; Admin-Rechte werden ueber Membership/Role erzwungen statt ueber ein manuelles `x-admin-token`-Feld.
 
 Dokumentierter Zustand:
 
@@ -409,7 +410,7 @@ Abschlussbewertung fuer M4d:
 - Score: `58/100`
 - Dokumentation: nur teilweise konsistent mit dem aktuellen Code
 - Konsistenz mit dem implementierten Code: **nicht ausreichend fuer Abschluss**
-- Blocker: dokumentierter Zielvertrag ohne Implementierung, altes Admin-Token-Modell in der GUI, kein belastbarer Gesamt-Diagnostics-Vertrag
+- Blocker: dokumentierter Zielvertrag ohne Implementierung, kein belastbarer Gesamt-Diagnostics-Vertrag
 - Entscheidung: `nicht abgeschlossen`
 
 ### M4e Backup/Restore

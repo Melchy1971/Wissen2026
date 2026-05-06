@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { rebuildSearchIndex } from '../api/admin.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { getJob } from '../api/jobs.js';
 import { EmptyState } from '../components/status/EmptyState.jsx';
 import { ErrorState } from '../components/status/ErrorState.jsx';
@@ -10,14 +11,23 @@ function formatResult(result) {
   return JSON.stringify(result, null, 2);
 }
 
+function membershipForWorkspace(memberships, workspaceId) {
+  if (!Array.isArray(memberships) || !workspaceId) {
+    return null;
+  }
+
+  return memberships.find((membership) => membership?.workspace_id === workspaceId) || null;
+}
+
 export function AdminDiagnosticsPage() {
-  const [adminToken, setAdminToken] = useState('');
-  const [workspaceId, setWorkspaceId] = useState('');
+  const { active_workspace_id: workspaceId, memberships } = useAuth();
   const [state, setState] = useState({ status: 'idle', job: null, result: null, error: null });
   const pollTimeoutRef = useRef(null);
 
   const copyPayload = useMemo(() => (state.result ? formatResult(state.result) : ''), [state.result]);
   const mappedJobState = mapJobStatus(state.job);
+  const activeMembership = useMemo(() => membershipForWorkspace(memberships, workspaceId), [memberships, workspaceId]);
+  const isWorkspaceAdmin = activeMembership?.role === 'owner' || activeMembership?.role === 'admin';
 
   useEffect(() => {
     return () => {
@@ -56,16 +66,15 @@ export function AdminDiagnosticsPage() {
   async function handleRebuildSubmit(event) {
     event.preventDefault();
 
-    const normalizedToken = adminToken.trim();
-    if (!normalizedToken) {
+    if (!isWorkspaceAdmin) {
       setState({
         status: 'error',
         job: null,
         result: null,
         error: {
-          code: 'AUTH_REQUIRED',
-          title: 'Admin-Authentifizierung erforderlich',
-          message: 'Fuer den Rebuild ist ein Admin-Token erforderlich.',
+          code: 'ADMIN_REQUIRED',
+          title: 'Admin-Zugriff erforderlich',
+          message: 'Der Search-Index-Rebuild steht nur Workspace-Ownern und Admins zur Verfuegung.',
         },
       });
       return;
@@ -73,7 +82,7 @@ export function AdminDiagnosticsPage() {
 
     setState({ status: 'loading', job: null, result: null, error: null });
     try {
-      const job = await rebuildSearchIndex({ adminToken: normalizedToken, workspaceId });
+      const job = await rebuildSearchIndex();
       setState({ status: 'polling', job, result: null, error: null });
       void pollJob(job.id);
     } catch (error) {
@@ -95,7 +104,7 @@ export function AdminDiagnosticsPage() {
           <p className="panel__eyebrow">M4d Diagnostics</p>
           <h2>Admin-Diagnostik</h2>
         </div>
-        <p className="page-header__meta">Maintenance Action: Search Index Rebuild</p>
+        <p className="page-header__meta">Maintenance Action: Search Index Rebuild · Workspace: {workspaceId || 'nicht konfiguriert'}</p>
       </div>
 
       <section className="panel diagnostics-card-grid">
@@ -110,27 +119,12 @@ export function AdminDiagnosticsPage() {
           <p className="diagnostics-card__text">
             Baut den PostgreSQL FTS-Index fuer aktive Dokumente neu auf. Archivierte und geloeschte Dokumente bleiben ausgeschlossen.
           </p>
+          <p className="state-card__meta">
+            Berechtigung: {isWorkspaceAdmin ? `Adminrolle (${activeMembership?.role})` : 'keine Adminrolle im aktiven Workspace'}
+          </p>
           <form className="search-bar" onSubmit={handleRebuildSubmit}>
-            <label className="search-bar__field">
-              <span className="search-bar__label">Admin-Token</span>
-              <input
-                type="password"
-                value={adminToken}
-                onChange={(event) => setAdminToken(event.target.value)}
-                placeholder="x-admin-token"
-              />
-            </label>
-            <label className="search-bar__field">
-              <span className="search-bar__label">Workspace-ID optional</span>
-              <input
-                type="text"
-                value={workspaceId}
-                onChange={(event) => setWorkspaceId(event.target.value)}
-                placeholder="leer = alle Workspaces"
-              />
-            </label>
             <div className="search-bar__actions">
-              <button type="submit" disabled={state.status === 'loading'}>
+              <button type="submit" disabled={state.status === 'loading' || !isWorkspaceAdmin}>
                 {state.status === 'loading' || state.status === 'polling' ? 'Rebuild laeuft...' : 'Search Index neu aufbauen'}
               </button>
             </div>

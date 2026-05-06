@@ -111,8 +111,9 @@ Pflicht-Tests:
 Status:
 
 - Die Pflicht-Uploadtests laufen ohne Skip im API-Testlauf.
-- Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist als einziger optionaler Test isoliert.
-- Aktueller Status des PostgreSQL-Race-Tests: im letzten echten Lauf nicht gruen verifiziert; der Test endete nicht mit fachlichem Ergebnis, sondern an PostgreSQL-Erreichbarkeit und Migrationsvoraussetzungen.
+- Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads bleibt nur ohne `TEST_DATABASE_URL` ein Skip.
+- Sobald `TEST_DATABASE_URL` gesetzt ist, muessen Alembic-Migrationen gruen sein; Migrationsfehler sind ein harter Testfehler.
+- Verifikation 2026-05-06: Der Test sammelt lokal sauber und skippt nur noch bei fehlender `TEST_DATABASE_URL`; ein echter PostgreSQL-Lauf war in dieser Umgebung wegen nicht verfuegbarem Docker und Remote-Connection-Timeout nicht erfolgreich ausfuehrbar.
 
 Nachweisgrenze:
 

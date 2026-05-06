@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 import { createChatSession, getChatSession, getChatSessions, postChatMessage } from '../api/chat.js';
+import { useAuth } from '../auth/AuthContext.jsx';
 import { ChatComposer } from '../components/chat/ChatComposer.jsx';
 import { ChatMessageThread } from '../components/chat/ChatMessageThread.jsx';
 import { ChatSessionList } from '../components/chat/ChatSessionList.jsx';
@@ -13,8 +14,7 @@ import { mapChatSessionDetail, mapChatSessionSummary, mapError, mapPostedChatRes
 export function ChatPage() {
   const navigate = useNavigate();
   const { id: activeSessionId } = useParams();
-  const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace_id') || '00000000-0000-0000-0000-000000000001';
+  const { active_workspace_id: workspaceId } = useAuth();
 
   const [sessionsState, setSessionsState] = useState({ status: 'loading', items: [], error: null });
   const [detailState, setDetailState] = useState({ status: 'idle', item: null, error: null });
@@ -27,12 +27,12 @@ export function ChatPage() {
     async function loadSessions() {
       setSessionsState({ status: 'loading', items: [], error: null });
       try {
-        const response = await getChatSessions({ workspaceId, limit: 20, offset: 0 });
+        const response = await getChatSessions({ limit: 20, offset: 0 });
         if (cancelled) return;
         const items = response.map(mapChatSessionSummary);
         setSessionsState({ status: 'success', items, error: null });
         if (!activeSessionId && items.length > 0) {
-          navigate(`/chat/${items[0].id}?workspace_id=${encodeURIComponent(workspaceId)}`, { replace: true });
+          navigate(`/chat/${items[0].id}`, { replace: true });
         }
       } catch (error) {
         if (cancelled) return;
@@ -44,7 +44,7 @@ export function ChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [navigate, workspaceId]);
+  }, [activeSessionId, navigate, workspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,14 +82,14 @@ export function ChatPage() {
     }
 
     try {
-      const created = mapChatSessionSummary(await createChatSession({ workspaceId, title }));
+      const created = mapChatSessionSummary(await createChatSession({ title }));
       setTitleInput('');
       setSessionsState((current) => ({
         status: 'success',
         items: [created, ...current.items.filter((item) => item.id !== created.id)],
         error: null,
       }));
-      navigate(`/chat/${created.id}?workspace_id=${encodeURIComponent(workspaceId)}`);
+      navigate(`/chat/${created.id}`);
     } catch (error) {
       setSessionsState((current) => ({ ...current, status: 'error', error: mapError(error) }));
     }
@@ -108,7 +108,7 @@ export function ChatPage() {
 
     try {
       const response = mapPostedChatResponse(
-        await postChatMessage(activeSessionId, { workspaceId, question, retrievalLimit: 8 }),
+        await postChatMessage(activeSessionId, { question, retrievalLimit: 8 }),
         { question },
       );
       setQuestionInput('');
@@ -148,7 +148,7 @@ export function ChatPage() {
           <p className="panel__eyebrow">M3c Chat</p>
           <h2>Dokumentgestuetzter Chat</h2>
         </div>
-        <p className="page-header__meta">Workspace: {workspaceId}</p>
+        <p className="page-header__meta">Workspace: {workspaceId || 'nicht konfiguriert'}</p>
       </div>
 
       <div className="chat-layout">

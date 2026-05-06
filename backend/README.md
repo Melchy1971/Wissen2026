@@ -207,6 +207,10 @@ $env:TEST_DATABASE_URL="postgresql://testuser:testpass@localhost:5433/wissen_tes
 pytest tests/integration/test_documents_import.py -v
 ```
 
+Wichtig: Nur eine fehlende `TEST_DATABASE_URL` ist hier ein legitimer Skip. Wenn `TEST_DATABASE_URL`
+gesetzt ist, muessen Alembic-`downgrade base` und `upgrade head` erfolgreich laufen; ein
+Migrationsfehler ist ein echter Testfehler.
+
 ### CI
 
 Im CI laufen die Postgres-Tests in einem eigenen Job `backend-postgres` mit einem

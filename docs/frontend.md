@@ -144,14 +144,14 @@ Aktuell verifiziert:
 - Dokumente und Chat ziehen den Workspace weiterhin aus `workspace_id` im Query-String.
 - Dokumente und Chat fallen teilweise auf einen hart codierten Default-Workspace zurueck.
 - Kein Login-Screen, kein Logout und kein serverseitig aufgeloester Benutzerkontext in der GUI.
-- Admin-Rechte werden separat ueber manuelles `x-admin-token` im UI modelliert.
+- Admin-Diagnostik nutzt den zentralen Auth-/Workspace-Kontext; die GUI zeigt keinen manuellen `x-admin-token`-Pfad mehr.
 
 ## M4a Konsistenzstand im Frontend
 
 Nachweisbar implementiert:
 
 - Fehlerabbildung fuer `AUTH_REQUIRED`, `ADMIN_REQUIRED`, `WORKSPACE_REQUIRED`
-- Admin-Diagnostik mit explizitem Admin-Token-Feld
+- Admin-Diagnostik mit Membership-/Rollenpruefung aus dem AuthContext
 - Workspace-Sichtbarkeit in Dokument- und Chat-Routen
 
 Nicht nachweisbar implementiert:

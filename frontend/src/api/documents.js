@@ -1,6 +1,6 @@
 import { requestJson } from './client.js';
 
-export function getDocuments({ workspaceId, limit = 20, offset = 0, lifecycleStatus } = {}) {
+export function getDocuments({ limit = 20, offset = 0, lifecycleStatus } = {}) {
   const query = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
@@ -29,16 +29,6 @@ export function getDocumentChunks(id, { limit } = {}) {
 
   const suffix = query.size > 0 ? `?${query.toString()}` : '';
   return requestJson(`/documents/${id}/chunks${suffix}`);
-}
-
-export function searchChunks({ workspaceId, query, limit = 20, offset = 0 }) {
-  const search = new URLSearchParams({
-    q: query,
-    limit: String(limit),
-    offset: String(offset),
-  });
-
-  return requestJson(`/api/v1/search/chunks?${search.toString()}`);
 }
 
 export function importDocument(file) {
