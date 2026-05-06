@@ -4,8 +4,9 @@ from types import SimpleNamespace
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.error_handlers import register_exception_handlers
 from app.api.v1.chat import get_chat_service, get_rag_chat_service
+from app.api.dependencies.auth import require_workspace_member
+from app.api.error_handlers import register_exception_handlers
 from app.core.errors import (
     ChatSessionNotFoundApiError,
     InsufficientContextApiError,
@@ -15,6 +16,7 @@ from app.core.errors import (
 from app.main import app
 from app.schemas.chat import ChatMessageResponse
 from app.services.chat.persistence_service import ChatPersistenceError, ChatSessionNotFoundError
+from tests.conftest import DEFAULT_WORKSPACE_ID
 
 
 def source_anchor() -> dict[str, int | str | None]:
@@ -35,7 +37,7 @@ class FakeChatService:
         self.now = datetime(2026, 5, 1, 12, 0, tzinfo=UTC)
         self.session = SimpleNamespace(
             id="session-1",
-            workspace_id="workspace-1",
+            workspace_id=DEFAULT_WORKSPACE_ID,
             title="Research",
             created_at=self.now,
             updated_at=self.now,
@@ -54,7 +56,10 @@ class FakeChatService:
             message_id="message-1",
             chunk_id="chunk-1",
             document_id="document-1",
+            document_title="Document Title",
+            quote_preview="Quelle aus dem Dokument",
             source_anchor=source_anchor(),
+            source_status="active",
         )
 
     def create_session(self, *, workspace_id: str, title: str, owner_user_id: str | None = None):
@@ -161,8 +166,10 @@ class FakeRagChatService:
                 {
                     "chunk_id": "chunk-1",
                     "document_id": "document-1",
+                    "document_title": "Document Title",
                     "source_anchor": source_anchor(),
                     "quote_preview": "Quelle aus dem Dokument",
+                    "source_status": "active",
                 }
             ],
             confidence={
@@ -193,29 +200,29 @@ def assert_error_response(
     }
 
 
-def test_create_chat_session_persists_session_and_returns_summary() -> None:
+def test_create_chat_session_persists_session_and_returns_summary(client: TestClient) -> None:
     service = FakeChatService()
     install_fake_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions",
-            json={"workspace_id": "workspace-1", "title": "Research"},
+            json={"title": "Research"},
         )
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 201
-    assert service.created_sessions == [{"workspace_id": "workspace-1", "title": "Research"}]
+    assert service.created_sessions == [{"workspace_id": DEFAULT_WORKSPACE_ID, "title": "Research"}]
     assert response.json() == {
         "id": "session-created",
-        "workspace_id": "workspace-1",
+        "workspace_id": DEFAULT_WORKSPACE_ID,
         "title": "Research",
         "created_at": "2026-05-01T12:00:00Z",
         "updated_at": "2026-05-01T12:00:00Z",
     }
 
 
-def test_list_chat_sessions_requires_workspace_id() -> None:
+def test_list_chat_sessions_requires_authenticated_context() -> None:
     service = FakeChatService()
     install_fake_service(service)
     try:
@@ -223,24 +230,24 @@ def test_list_chat_sessions_requires_workspace_id() -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "WORKSPACE_REQUIRED"
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AUTH_REQUIRED"
 
 
-def test_list_chat_sessions_uses_pagination_and_stable_response_shape() -> None:
+def test_list_chat_sessions_uses_pagination_and_stable_response_shape(client: TestClient) -> None:
     service = FakeChatService()
     install_fake_service(service)
     try:
-        response = TestClient(app).get("/api/v1/chat/sessions?workspace_id=workspace-1&limit=10&offset=5")
+        response = client.get("/api/v1/chat/sessions?limit=10&offset=5")
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert service.list_call == {"workspace_id": "workspace-1", "limit": 10, "offset": 5}
+    assert service.list_call == {"workspace_id": DEFAULT_WORKSPACE_ID, "limit": 10, "offset": 5}
     assert response.json() == [
         {
             "id": "session-1",
-            "workspace_id": "workspace-1",
+            "workspace_id": DEFAULT_WORKSPACE_ID,
             "title": "Research",
             "created_at": "2026-05-01T12:00:00Z",
             "updated_at": "2026-05-01T12:00:00Z",
@@ -248,11 +255,20 @@ def test_list_chat_sessions_uses_pagination_and_stable_response_shape() -> None:
     ]
 
 
-def test_chat_persistence_error_uses_standard_error_format() -> None:
+def test_chat_persistence_error_uses_standard_error_format(client: TestClient) -> None:
     service = FakeChatService()
     install_fake_service(service)
+    app.dependency_overrides[require_workspace_member] = lambda: SimpleNamespace(
+        session_id="session-auth-1",
+        user_id="user-1",
+        login="test-user",
+        display_name="Test User",
+        workspace_id="persistence-fail",
+        role="owner",
+        permissions=("workspace:read", "document:import", "workspace:admin"),
+    )
     try:
-        response = TestClient(app).get("/api/v1/chat/sessions?workspace_id=persistence-fail")
+        response = client.get("/api/v1/chat/sessions")
     finally:
         app.dependency_overrides.clear()
 
@@ -266,11 +282,11 @@ def test_chat_persistence_error_uses_standard_error_format() -> None:
     }
 
 
-def test_get_chat_session_detail_returns_messages_and_filtered_citations() -> None:
+def test_get_chat_session_detail_returns_messages_and_filtered_citations(client: TestClient) -> None:
     service = FakeChatService()
     install_fake_service(service)
     try:
-        response = TestClient(app).get("/api/v1/chat/sessions/session-1")
+        response = client.get("/api/v1/chat/sessions/session-1")
     finally:
         app.dependency_overrides.clear()
 
@@ -288,8 +304,10 @@ def test_get_chat_session_detail_returns_messages_and_filtered_citations() -> No
                 {
                     "chunk_id": "chunk-1",
                     "document_id": "document-1",
+                    "document_title": "Document Title",
                     "source_anchor": source_anchor(),
-                    "quote_preview": None,
+                    "quote_preview": "Quelle aus dem Dokument",
+                    "source_status": "active",
                 }
             ],
             "confidence": None,
@@ -299,18 +317,21 @@ def test_get_chat_session_detail_returns_messages_and_filtered_citations() -> No
     assert "metadata_" not in body["messages"][0]
 
 
-def test_get_chat_session_detail_keeps_historical_citations_visible_for_deleted_documents() -> None:
+def test_get_chat_session_detail_keeps_historical_citations_visible_for_deleted_documents(client: TestClient) -> None:
     service = FakeChatService()
     service.citation = SimpleNamespace(
         id="citation-deleted-1",
         message_id="message-1",
-        chunk_id="chunk-deleted-1",
+        chunk_id=None,
         document_id="document-deleted-1",
+        document_title="Deleted Document",
+        quote_preview="Historische Quelle bleibt lesbar",
         source_anchor=source_anchor(),
+        source_status="deleted",
     )
     install_fake_service(service)
     try:
-        response = TestClient(app).get("/api/v1/chat/sessions/session-1")
+        response = client.get("/api/v1/chat/sessions/session-1")
     finally:
         app.dependency_overrides.clear()
 
@@ -318,19 +339,21 @@ def test_get_chat_session_detail_keeps_historical_citations_visible_for_deleted_
     citations = response.json()["messages"][0]["citations"]
     assert citations == [
         {
-            "chunk_id": "chunk-deleted-1",
+            "chunk_id": None,
             "document_id": "document-deleted-1",
+            "document_title": "Deleted Document",
             "source_anchor": source_anchor(),
-            "quote_preview": None,
+            "quote_preview": "Historische Quelle bleibt lesbar",
+            "source_status": "deleted",
         }
     ]
 
 
-def test_get_chat_session_detail_returns_404_for_unknown_session() -> None:
+def test_get_chat_session_detail_returns_404_for_unknown_session(client: TestClient) -> None:
     service = FakeChatService()
     install_fake_service(service)
     try:
-        response = TestClient(app).get("/api/v1/chat/sessions/missing")
+        response = client.get("/api/v1/chat/sessions/missing")
     finally:
         app.dependency_overrides.clear()
 
@@ -338,14 +361,13 @@ def test_get_chat_session_detail_returns_404_for_unknown_session() -> None:
     assert response.json()["error"]["code"] == "CHAT_SESSION_NOT_FOUND"
 
 
-def test_create_chat_message_runs_rag_pipeline_and_returns_assistant_response() -> None:
+def test_create_chat_message_runs_rag_pipeline_and_returns_assistant_response(client: TestClient) -> None:
     service = FakeRagChatService()
     install_fake_rag_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/session-1/messages",
             json={
-                "workspace_id": "workspace-1",
                 "question": "Bitte zusammenfassen.",
                 "retrieval_limit": 3,
             },
@@ -357,7 +379,7 @@ def test_create_chat_message_runs_rag_pipeline_and_returns_assistant_response() 
     assert service.calls == [
         {
             "session_id": "session-1",
-            "workspace_id": "workspace-1",
+            "workspace_id": DEFAULT_WORKSPACE_ID,
             "question": "Bitte zusammenfassen.",
             "retrieval_limit": 3,
         }
@@ -373,8 +395,10 @@ def test_create_chat_message_runs_rag_pipeline_and_returns_assistant_response() 
             {
                 "chunk_id": "chunk-1",
                 "document_id": "document-1",
+                "document_title": "Document Title",
                 "source_anchor": source_anchor(),
                 "quote_preview": "Quelle aus dem Dokument",
+                "source_status": "active",
             }
         ],
         "confidence": {
@@ -385,16 +409,15 @@ def test_create_chat_message_runs_rag_pipeline_and_returns_assistant_response() 
     }
 
 
-def test_create_chat_message_endpoint_can_run_real_rag_service_with_fake_llm() -> None:
+def test_create_chat_message_endpoint_can_run_real_rag_service_with_fake_llm(client: TestClient) -> None:
     from tests.test_rag_chat_service import make_service as make_rag_service
 
     rag_service, persistence, retrieval, _llm = make_rag_service()
     app.dependency_overrides[get_rag_chat_service] = lambda: rag_service
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/session-1/messages",
             json={
-                "workspace_id": "workspace-1",
                 "question": "Welche Kuendigungsfrist gilt nach der Probezeit?",
                 "retrieval_limit": 8,
             },
@@ -419,6 +442,7 @@ def test_create_chat_message_endpoint_can_run_real_rag_service_with_fake_llm() -
             {
                 "chunk_id": "chunk-1",
                 "document_id": "doc-1",
+                "document_title": "Arbeitsvertrag Hybridmodell",
                 "source_anchor": {
                     "type": "text",
                     "page": None,
@@ -430,6 +454,7 @@ def test_create_chat_message_endpoint_can_run_real_rag_service_with_fake_llm() -
                     "Nach der Probezeit gilt eine Kuendigungsfrist von vier Wochen zum Monatsende "
                     "fuer das Arbeitsverhaeltnis im Unternehmen."
                 ),
+                "source_status": "active",
             }
         ],
         "confidence": {
@@ -440,13 +465,13 @@ def test_create_chat_message_endpoint_can_run_real_rag_service_with_fake_llm() -
     }
 
 
-def test_create_chat_message_returns_404_for_unknown_session() -> None:
+def test_create_chat_message_returns_404_for_unknown_session(client: TestClient) -> None:
     service = FakeRagChatService()
     install_fake_rag_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/missing/messages",
-            json={"workspace_id": "workspace-1", "question": "Bitte zusammenfassen."},
+            json={"question": "Bitte zusammenfassen."},
         )
     finally:
         app.dependency_overrides.clear()
@@ -460,13 +485,13 @@ def test_create_chat_message_returns_404_for_unknown_session() -> None:
     )
 
 
-def test_create_chat_message_validation_uses_standard_error_format() -> None:
+def test_create_chat_message_validation_uses_standard_error_format(client: TestClient) -> None:
     service = FakeRagChatService()
     install_fake_rag_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/session-1/messages",
-            json={"workspace_id": "workspace-1", "question": ""},
+            json={"question": ""},
         )
     finally:
         app.dependency_overrides.clear()
@@ -480,13 +505,13 @@ def test_create_chat_message_validation_uses_standard_error_format() -> None:
     assert body["error"]["details"]["errors"][0]["loc"] == ["body", "question"]
 
 
-def test_create_chat_message_maps_insufficient_context() -> None:
+def test_create_chat_message_maps_insufficient_context(client: TestClient) -> None:
     service = FakeRagChatService()
     install_fake_rag_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/session-1/messages",
-            json={"workspace_id": "workspace-1", "question": "insufficient"},
+            json={"question": "insufficient"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -500,13 +525,13 @@ def test_create_chat_message_maps_insufficient_context() -> None:
     )
 
 
-def test_create_chat_message_maps_retrieval_failure() -> None:
+def test_create_chat_message_maps_retrieval_failure(client: TestClient) -> None:
     service = FakeRagChatService()
     install_fake_rag_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/session-1/messages",
-            json={"workspace_id": "workspace-1", "question": "retrieval failed"},
+            json={"question": "retrieval failed"},
         )
     finally:
         app.dependency_overrides.clear()
@@ -516,17 +541,17 @@ def test_create_chat_message_maps_retrieval_failure() -> None:
         response.json(),
         code="RETRIEVAL_FAILED",
         message="postgres search failed",
-        details={"workspace_id": "workspace-1"},
+        details={"workspace_id": DEFAULT_WORKSPACE_ID},
     )
 
 
-def test_create_chat_message_maps_llm_unavailable() -> None:
+def test_create_chat_message_maps_llm_unavailable(client: TestClient) -> None:
     service = FakeRagChatService()
     install_fake_rag_service(service)
     try:
-        response = TestClient(app).post(
+        response = client.post(
             "/api/v1/chat/sessions/session-1/messages",
-            json={"workspace_id": "workspace-1", "question": "llm unavailable"},
+            json={"question": "llm unavailable"},
         )
     finally:
         app.dependency_overrides.clear()

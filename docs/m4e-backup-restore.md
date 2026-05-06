@@ -2,6 +2,13 @@
 
 Stand: 2026-05-05
 
+## Realer Status am 2026-05-06
+
+- Dieses Dokument beschreibt weiterhin ein Zielkonzept, keinen real implementierten Betriebsprozess.
+- Im aktuellen Repository gibt es keinen nachweisbaren Backup-CLI- oder Restore-Codepfad.
+- Es gibt keine echten Backup-/Restore-Tests.
+- M4e ist deshalb fachlich definiert, aber technisch weiterhin `missing`.
+
 ## Ziel
 
 M4e stellt sicher, dass das lokale Wissenssystem bei Datenbankfehlern, Dateisystemfehlern oder Bedienfehlern nicht irreversibel verloren geht. Die Wiederherstellung muss fuer den gesamten aktiven Workspace-Bestand nachvollziehbar und validierbar sein.

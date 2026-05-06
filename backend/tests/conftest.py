@@ -18,6 +18,7 @@ from app.models.documents import AuthSession, Base, Chunk, Document, DocumentVer
 from app.repositories.documents import DocumentRepository
 from app.services.auth import hash_password, hash_token
 from app.services.documents.lifecycle_service import DocumentLifecycleService
+from app.services.documents.import_recovery_service import DocumentImportRecoveryService
 from app.services.documents.read_service import DocumentReadService
 from app.services.jobs.background_jobs import BackgroundJobService
 
@@ -273,9 +274,13 @@ def client(db_session: Session, auth_fixture: dict[str, str]) -> Iterator[TestCl
     def override_background_job_service() -> Iterator[BackgroundJobService]:
         yield BackgroundJobService.from_session(db_session)
 
+    def override_document_import_recovery_service() -> Iterator[DocumentImportRecoveryService]:
+        yield DocumentImportRecoveryService.from_session(db_session)
+
     app.dependency_overrides[documents_api.get_document_read_service] = override_document_read_service
     app.dependency_overrides[documents_api.get_document_lifecycle_service] = override_document_lifecycle_service
     app.dependency_overrides[documents_api.get_background_job_service] = override_background_job_service
+    app.dependency_overrides[documents_api.get_document_import_recovery_service] = override_document_import_recovery_service
     try:
         yield TestClient(
             app,

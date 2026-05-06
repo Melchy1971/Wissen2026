@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from threading import Lock
 from typing import Any
 
+from app.schemas.observability import ImportEventName, ImportEventStatus, ImportObservabilityEvent
+
 
 @dataclass(frozen=True)
 class ObservabilityContext:
@@ -106,5 +108,33 @@ def log_event(
         "error_code": error_code,
         "correlation_id": correlation_id if correlation_id is not None else current.correlation_id,
     }
+    metrics_registry.record(event_name=event_name, status=status)
+    event_logger.info("observability_event", extra={"observability": payload})
+
+
+def log_import_event(
+    event_name: ImportEventName,
+    *,
+    document_id: str | None,
+    workspace_id: str | None,
+    duration_ms: int | None,
+    parser_type: str,
+    chunk_count: int,
+    status: ImportEventStatus,
+    error_code: str | None = None,
+    correlation_id: str | None = None,
+) -> None:
+    current = get_observability_context()
+    payload = ImportObservabilityEvent(
+        event_name=event_name,
+        document_id=document_id,
+        workspace_id=workspace_id if workspace_id is not None else current.workspace_id,
+        duration_ms=duration_ms,
+        parser_type=parser_type,
+        chunk_count=chunk_count,
+        error_code=error_code,
+        correlation_id=correlation_id if correlation_id is not None else current.correlation_id,
+        status=status,
+    ).model_dump()
     metrics_registry.record(event_name=event_name, status=status)
     event_logger.info("observability_event", extra={"observability": payload})

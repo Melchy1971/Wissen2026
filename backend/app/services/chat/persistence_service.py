@@ -23,9 +23,12 @@ class ChatSessionNotFoundError(ChatPersistenceError):
 
 @dataclass(frozen=True)
 class ChatCitationPayload:
-    chunk_id: str
+    chunk_id: str | None
     document_id: str
+    document_title: str
+    quote_preview: str
     source_anchor: dict
+    source_status: str = "active"
 
 
 class ChatPersistenceService:
@@ -153,7 +156,10 @@ class ChatPersistenceService:
                     message_id=chat_message.id,
                     chunk_id=citation.chunk_id,
                     document_id=citation.document_id,
+                    document_title=citation.document_title,
+                    quote_preview=citation.quote_preview,
                     source_anchor=citation.source_anchor,
+                    source_status=citation.source_status,
                 )
             )
 
@@ -173,9 +179,15 @@ class ChatPersistenceService:
         return 0 if latest_index is None else int(latest_index) + 1
 
     def _validate_citation_payload(self, citation: ChatCitationPayload) -> None:
-        if not citation.chunk_id.strip():
-            raise ChatPersistenceError("citation chunk_id must not be blank")
         if not citation.document_id.strip():
             raise ChatPersistenceError("citation document_id must not be blank")
+        if not citation.document_title.strip():
+            raise ChatPersistenceError("citation document_title must not be blank")
+        if not citation.quote_preview.strip():
+            raise ChatPersistenceError("citation quote_preview must not be blank")
         if not isinstance(citation.source_anchor, dict):
             raise ChatPersistenceError("citation source_anchor must be a dict")
+        if citation.chunk_id is not None and not citation.chunk_id.strip():
+            raise ChatPersistenceError("citation chunk_id must not be blank when provided")
+        if citation.source_status not in {"active", "archived", "deleted", "unknown"}:
+            raise ChatPersistenceError("citation source_status must be one of: active, archived, deleted, unknown")

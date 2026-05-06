@@ -244,17 +244,22 @@ Relevante Migrationen fuer das Dokumentmodell:
 - `20260504_0011_chunk_search_vector.py`: PostgreSQL-FTS-Spalte und `GIN`-Index fuer Retrieval.
 - `20260504_0012_chat_message_metadata_and_citations.py`: Ausrichtung von `chat_messages.metadata` und neue Tabelle `chat_citations`.
 - `20260505_0013_document_lifecycle.py`: Lifecycle-Felder, Constraint und Listenindex fuer `active|archived|deleted`.
+- `20260506_0012_chunk_searchability.py`: `document_chunks.is_searchable` und lifecycle-abhaengige Search-Indexierbarkeit.
+- `20260506_0013_historical_chat_citation_snapshots.py`: Snapshot-Felder fuer historische Citations und `source_status`.
 
 ## M4c Lifecycle-Auswirkungen auf Retrieval und Chat
 
 - Search beruecksichtigt nur Dokumente mit `lifecycle_status = active`.
 - Archivierte Dokumente bleiben datenmodellseitig vollstaendig erhalten, fallen aber aus neuem Retrieval heraus.
 - Geloeschte Dokumente bleiben zur Wahrung historischer Referenzen vorhanden, sind aber fachlich unsichtbar.
+- `document_chunks.is_searchable` bildet die Search-Sichtbarkeit explizit ab.
+- `chat_citations` speichert Snapshot-Felder wie `document_title`, `quote_preview` und `source_status`, damit historische Antworten lesbar bleiben.
 
 Bekannte Einschraenkungen:
 
 - Das Datenmodell enthaelt keinen separaten Purge-Status oder Hard-Delete-Prozess.
 - `deleted` ist terminal; eine Rueckkehr in `active` oder `archived` ist nicht modelliert.
+- Historische Citations werden absichtlich nicht an den aktuellen Read- oder Search-Sichtbarkeitsstatus angepasst, sondern nur ueber `source_status` markiert.
 
 ## Performance- und Reparaturergaenzungen aus Paket 5
 

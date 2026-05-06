@@ -257,13 +257,18 @@ class RagChatService:
         return ChatCitationPayload(
             chunk_id=citation.chunk_id,
             document_id=citation.document_id,
+            document_title=citation.document_title,
+            quote_preview=citation.quote_preview,
             source_anchor=citation.source_anchor.model_dump(),
+            source_status="active",
         )
 
     def _to_citation_response(self, citation: Citation) -> ChatCitationResponse:
         return ChatCitationResponse(
             chunk_id=citation.chunk_id,
             document_id=citation.document_id,
+            document_title=citation.document_title,
             source_anchor=citation.source_anchor,
             quote_preview=citation.quote_preview,
+            source_status="active",
         )

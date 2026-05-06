@@ -44,3 +44,5 @@ Das fachliche Konzept und die Architekturregeln stehen in [docs/m4e-backup-resto
 - Konzept definiert
 - CLI/API-Vorschlag definiert
 - operative Automatisierung noch nicht implementiert
+- kein nachweisbarer produktiver Backup- oder Restore-Codepfad im aktuellen Repository
+- kein operativer Testnachweis fuer einen erfolgreichen Restore-Lauf

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
-from app.api.v1.admin import get_background_job_service
+from app.api.v1.admin import get_background_job_service, get_search_index_service
 from app.core.config import settings
 from app.main import app
 
@@ -54,6 +54,49 @@ class FakeBackgroundJobService:
         }
 
 
+class FakeSearchIndexService:
+    def __init__(self) -> None:
+        self.calls: list[str | None] = []
+
+    def inspect_inconsistencies(self, *, workspace_id: str | None = None):
+        self.calls.append(workspace_id)
+        return {
+            "workspace_id": workspace_id,
+            "checked_at": datetime(2026, 5, 6, 10, 0, tzinfo=UTC),
+            "index_name": "ix_document_chunks_search_vector",
+            "status": "inconsistent",
+            "searchable_chunk_count": 12,
+            "missing_index_entries": {
+                "count": 1,
+                "status": "inconsistent",
+                "sample_chunk_ids": ["chunk-missing-1"],
+                "sample_document_ids": ["doc-active-1"],
+                "note": None,
+            },
+            "orphan_index_entries": {
+                "count": 0,
+                "status": "not_applicable",
+                "sample_chunk_ids": [],
+                "sample_document_ids": [],
+                "note": "GIN index entries are derived from document_chunks.search_vector and cannot be enumerated as standalone rows.",
+            },
+            "deleted_documents_in_index": {
+                "count": 2,
+                "status": "inconsistent",
+                "sample_chunk_ids": ["chunk-deleted-1"],
+                "sample_document_ids": ["doc-deleted-1"],
+                "note": None,
+            },
+            "archived_documents_in_active_index": {
+                "count": 1,
+                "status": "inconsistent",
+                "sample_chunk_ids": ["chunk-archived-1"],
+                "sample_document_ids": ["doc-archived-1"],
+                "note": None,
+            },
+        }
+
+
 def test_admin_search_index_rebuild_requires_authentication() -> None:
     response = TestClient(app).post("/api/v1/admin/search-index/rebuild")
 
@@ -61,38 +104,32 @@ def test_admin_search_index_rebuild_requires_authentication() -> None:
     assert response.json()["error"]["code"] == "AUTH_REQUIRED"
 
 
-def test_admin_search_index_rebuild_requires_valid_admin_token(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "admin_api_token", "expected-token")
-
+def test_admin_search_index_rebuild_requires_authentication_even_with_legacy_admin_token_header() -> None:
     response = TestClient(app).post(
         "/api/v1/admin/search-index/rebuild",
         headers={"x-admin-token": "wrong-token"},
     )
 
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "ADMIN_REQUIRED"
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AUTH_REQUIRED"
 
 
-def test_admin_search_index_rebuild_returns_stable_shape(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "admin_api_token", "expected-token")
+def test_admin_search_index_rebuild_returns_stable_shape(client: TestClient) -> None:
     service = FakeBackgroundJobService()
     app.dependency_overrides[get_background_job_service] = lambda: service
     try:
-        response = TestClient(app).post(
-            "/api/v1/admin/search-index/rebuild?workspace_id=workspace-1",
-            headers={"x-admin-token": "expected-token"},
-        )
+        response = client.post("/api/v1/admin/search-index/rebuild")
     finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 202
-    assert service.calls == ["workspace-1"]
+    assert len(service.calls) == 1
     assert response.json() == {
         "id": "job-1",
         "job_type": "search_index_rebuild",
         "status": "queued",
-        "workspace_id": "workspace-1",
-        "requested_by_user_id": None,
+        "workspace_id": "00000000-0000-0000-0000-000000000001",
+        "requested_by_user_id": "00000000-0000-0000-0000-000000000001",
         "filename": None,
         "created_at": "2026-05-05T00:00:00Z",
         "started_at": None,
@@ -103,4 +140,58 @@ def test_admin_search_index_rebuild_returns_stable_shape(monkeypatch) -> None:
         "error_code": None,
         "error_message": None,
         "result": None,
+    }
+
+
+def test_admin_search_index_inconsistencies_requires_authentication() -> None:
+    response = TestClient(app).get("/api/v1/admin/search-index/inconsistencies")
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "AUTH_REQUIRED"
+
+
+def test_admin_search_index_inconsistencies_returns_stable_shape(client: TestClient) -> None:
+    service = FakeSearchIndexService()
+    app.dependency_overrides[get_search_index_service] = lambda: service
+    try:
+        response = client.get("/api/v1/admin/search-index/inconsistencies")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert service.calls == ["00000000-0000-0000-0000-000000000001"]
+    assert response.json() == {
+        "workspace_id": "00000000-0000-0000-0000-000000000001",
+        "checked_at": "2026-05-06T10:00:00Z",
+        "index_name": "ix_document_chunks_search_vector",
+        "status": "inconsistent",
+        "searchable_chunk_count": 12,
+        "missing_index_entries": {
+            "count": 1,
+            "status": "inconsistent",
+            "sample_chunk_ids": ["chunk-missing-1"],
+            "sample_document_ids": ["doc-active-1"],
+            "note": None,
+        },
+        "orphan_index_entries": {
+            "count": 0,
+            "status": "not_applicable",
+            "sample_chunk_ids": [],
+            "sample_document_ids": [],
+            "note": "GIN index entries are derived from document_chunks.search_vector and cannot be enumerated as standalone rows.",
+        },
+        "deleted_documents_in_index": {
+            "count": 2,
+            "status": "inconsistent",
+            "sample_chunk_ids": ["chunk-deleted-1"],
+            "sample_document_ids": ["doc-deleted-1"],
+            "note": None,
+        },
+        "archived_documents_in_active_index": {
+            "count": 1,
+            "status": "inconsistent",
+            "sample_chunk_ids": ["chunk-archived-1"],
+            "sample_document_ids": ["doc-archived-1"],
+            "note": None,
+        },
     }

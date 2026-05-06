@@ -2,6 +2,30 @@
 
 Stand: 2026-05-05
 
+## 2026-05-06 - M4 Gesamtstatus neu bewertet
+
+### Changed
+
+- `docs/status.md`, `docs/api.md`, `docs/m4d-admin-diagnostics.md`, `docs/m4e-backup-restore.md`, `docs/runbooks/backup-restore.md`, `docs/changelog.md` und `masterplan.md` auf den neu bewerteten M4-Gesamtstatus abgeglichen.
+- Scores, Blocker, Go/No-Go und die M5-Gate-Regel fuer `M4a`, `M4b` und `M4c` explizit dokumentiert.
+- M4d-Dokumentation als teilweise Zielvertrag markiert, weil der aggregierte Diagnostics-Endpunkt aktuell nicht implementiert ist.
+- M4e-Dokumentation als Konzept ohne reale Implementierung oder Testnachweis geschaerft.
+
+### Findings
+
+- `M4a = 82/100`, `M4b = 88/100`, `M4c = 86/100`, `M4d = 58/100`, `M4e = 18/100`.
+- M4 ist damit `teilweise stabil`.
+- M5 bleibt blockiert, weil `M4a < 95`, `M4b < 90` und `M4c < 90`.
+- Der letzte PostgreSQL-Integrationslauf fuer Search/Reindex ist weiterhin an Connection-Timeouts gegen die konfigurierte Ziel-Datenbank gescheitert.
+- Die vorhandene Admin-Diagnostics-GUI bildet real nur den Search-Index-Rebuild-Flow ab.
+- Backup/Restore bleibt Runbook- und Konzeptstand ohne nachweisbare Implementierung.
+
+### Decision
+
+- Go fuer M4d: `No-Go`
+- Go fuer M4e: `No-Go`
+- Go fuer M5: `No-Go`
+
 ## 2026-05-05 - Upload-Dokumentation auf Auth- und Fehlervertrag aktualisiert
 
 ### Changed
@@ -22,12 +46,12 @@ Stand: 2026-05-05
 
 - Die Upload-Dokumentation entspricht jetzt dem aktuellen Code- und Teststand.
 
-## 2026-05-05 - M4c Dokumentationssync und Konsistenzpruefung
+## 2026-05-06 - M4c Dokumentationssync und Konsistenzpruefung nach Gate-Lauf
 
 ### Changed
 
-- `docs/status.md`, `docs/api.md`, `docs/data-model.md`, `docs/retrieval.md`, `docs/rag.md`, `docs/changelog.md` und `masterplan.md` auf den nachweisbaren M4c-Stand abgeglichen.
-- Lifecycle-Regeln fuer `active`, `archived` und `deleted` sowie die Auswirkungen auf Liste, Search, Chat und Citation-Historie dokumentiert.
+- `docs/status.md`, `docs/api.md`, `docs/data-model.md`, `docs/retrieval.md`, `docs/rag.md`, `docs/frontend.md`, `docs/operations.md`, `docs/changelog.md` und `masterplan.md` auf den nachweisbaren M4c-Stand abgeglichen.
+- Lifecycle-State-Machine, Search-/Chat-Verhalten, historische Citations, Reindex-Regeln, Soft-Delete-Verhalten und bekannte Einschraenkungen auf den verifizierten Stand reduziert.
 
 ### Findings
 
@@ -35,12 +59,15 @@ Stand: 2026-05-05
 - `GET /documents` blendet `archived` standardmaessig aus und `deleted` konsequent weg.
 - Search/Retrieval akzeptiert nur `active`.
 - `DELETE /documents/{document_id}` ist als Soft-Delete implementiert.
-- Historische Chat-Citations bleiben fuer geloeschte Dokumente sichtbar.
+- Historische Chat-Citations bleiben fuer archivierte und geloeschte Dokumente sichtbar.
+- Die GUI fuer Lifecycle-Filter, Archive, Restore und Soft-Delete ist ueber Frontend-Screen-Tests nachgewiesen.
+- Der letzte PostgreSQL-Integrationslauf fuer Search und Reindex ist an Connection-Timeouts gegen die konfigurierte Ziel-Datenbank gescheitert.
+- Fuer neue Chat-Antworten gibt es keinen eigenen Lifecycle-Integrationstest; der Nachweis ist indirekt ueber Retrieval gegeben.
 
 ### Decision
 
 - Dokumentation fuer M4c ist aktualisiert.
-- M4c ist nach dem aktuellen Repository-Stand **abgeschlossen**.
+- M4c ist nach dem aktuellen Repository-Stand **nicht abgeschlossen**.
 
 ## 2026-05-05 - M4b Dokumentationssync und Konsistenzpruefung
 

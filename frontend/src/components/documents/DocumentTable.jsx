@@ -12,6 +12,7 @@ export function DocumentTable({ items }) {
         <tr>
           <th>Titel</th>
           <th>Typ</th>
+          <th>Lifecycle</th>
           <th>Status</th>
           <th>Versionen</th>
           <th>Chunks</th>
@@ -25,6 +26,7 @@ export function DocumentTable({ items }) {
               <Link to={`/documents/${item.id}?workspace_id=${encodeURIComponent(workspaceId)}`}>{item.title}</Link>
             </td>
             <td>{item.mimeType}</td>
+            <td><StatusBadge status={item.lifecycleStatus} /></td>
             <td><StatusBadge status={item.importStatus} /></td>
             <td>{item.versionCount}</td>
             <td>{item.chunkCount}</td>

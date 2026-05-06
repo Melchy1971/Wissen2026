@@ -437,6 +437,29 @@ button:focus-visible {
 	border-radius: var(--radius-lg);
 }
 
+.search-bar select {
+	width: 100%;
+	padding: 0.625rem 1rem;
+	border-radius: var(--radius-lg);
+	font: inherit;
+	color: var(--color-text);
+	background: var(--t-gray-05);
+	border: 1.5px solid var(--color-border);
+	transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.search-bar select:hover {
+	border-color: var(--t-gray-40);
+	background: var(--t-white);
+}
+
+.search-bar select:focus {
+	outline: none;
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 3px var(--t-magenta-10);
+	background: var(--t-white);
+}
+
 .search-bar__actions {
 	display: flex;
 	align-items: center;
@@ -496,6 +519,17 @@ button:focus-visible {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 	gap: 1rem;
+}
+
+.badge-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.lifecycle-warning {
+	margin-top: -0.25rem;
 }
 
 .diagnostics-card-grid {

@@ -2,6 +2,13 @@
 
 Stand: 2026-05-05
 
+## Realer Status am 2026-05-06
+
+- Real implementiert sind aktuell die Search-Index-Rebuild-Aktion, der Inconsistency-Report, Health-Endpunkte und Observability-Slices.
+- Die Frontend-Seite `/admin/diagnostics` existiert, bildet derzeit aber nur den Rebuild-/Resultat-Flow ab.
+- Nicht real implementiert ist ein aggregierter Backend-Endpunkt `GET /api/v1/admin/diagnostics` mit den unten beschriebenen Statuskarten.
+- Dieses Dokument beschreibt daher gemischt aus Ist-Stand und Zielvertrag; der Zielvertrag ist noch nicht freigegeben.
+
 ## Ziel
 
 M4d macht den operativen Systemzustand fuer Administratoren sichtbar, ohne fachliche Inhalte oder sensible Daten offenzulegen. Die Diagnoseansicht ist eine Betriebsoberflaeche fuer Verfuegbarkeit, Datenqualitaet, Importstabilitaet, Search-Bereitschaft und Chat-/RAG-Stabilitaet.
@@ -43,6 +50,10 @@ Datensparsamkeit:
 Zulaessig sind nur aggregierte Kennzahlen, redigierte Fehlercodes und redigierte technische Hinweise.
 
 ## Backend Diagnostics API
+
+Status:
+
+- Zielvertrag, derzeit nicht real implementiert.
 
 ### Endpoint
 

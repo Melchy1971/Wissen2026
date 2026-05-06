@@ -40,6 +40,7 @@ describe('DocumentsPage', () => {
           updated_at: '2026-05-01T10:10:00',
           latest_version_id: 'ver-1',
           import_status: 'chunked',
+          lifecycle_status: 'active',
           version_count: 1,
           chunk_count: 2,
         },
@@ -51,8 +52,9 @@ describe('DocumentsPage', () => {
     expect(screen.getByText(/Dokumente werden geladen/i)).toBeInTheDocument();
     expect(await screen.findByText('Vertragsentwurf')).toBeInTheDocument();
     expect(screen.getByText('Lesbar')).toBeInTheDocument();
+    expect(screen.getByText('active')).toBeInTheDocument();
     expect(globalThis.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/documents?limit=20&offset=0'),
+      expect.stringContaining('/documents?limit=20&offset=0&lifecycle_status=active'),
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer test-token',
@@ -108,6 +110,7 @@ describe('DocumentsPage', () => {
             updated_at: '2026-05-01T10:10:00',
             latest_version_id: 'ver-1',
             import_status: 'chunked',
+            lifecycle_status: 'active',
             version_count: 1,
             chunk_count: 2,
           },
@@ -290,6 +293,7 @@ describe('DocumentsPage', () => {
             updated_at: '2026-05-05T00:00:02Z',
             latest_version_id: 'ver-2',
             import_status: 'chunked',
+            lifecycle_status: 'active',
             version_count: 1,
             chunk_count: 4,
           },
@@ -318,6 +322,27 @@ describe('DocumentsPage', () => {
         ok: true,
         headers: new Headers({ 'content-type': 'application/json' }),
         json: async () => ([]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ({
+          id: 'job-queued',
+          job_type: 'document_import',
+          status: 'queued',
+          workspace_id: 'workspace-1',
+          requested_by_user_id: null,
+          filename: 'notes.txt',
+          created_at: '2026-05-05T00:00:00Z',
+          started_at: null,
+          finished_at: null,
+          progress_current: 0,
+          progress_total: 1,
+          progress_message: null,
+          error_code: null,
+          error_message: null,
+          result: null,
+        }),
       })
       .mockResolvedValueOnce({
         ok: true,
@@ -583,5 +608,62 @@ describe('DocumentsPage', () => {
 
     expect(await screen.findByText('Datei zu gross')).toBeInTheDocument();
     expect(screen.getByText(/Fehlercode: FILE_TOO_LARGE/i)).toBeInTheDocument();
+  });
+
+  it('filters archived documents explicitly and does not expose a deleted filter', async () => {
+    primeRequestContext();
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([
+          {
+            id: 'doc-1',
+            title: 'Aktives Dokument',
+            mime_type: 'text/plain',
+            created_at: '2026-05-01T10:00:00',
+            updated_at: '2026-05-01T10:10:00',
+            latest_version_id: 'ver-1',
+            import_status: 'chunked',
+            lifecycle_status: 'active',
+            version_count: 1,
+            chunk_count: 2,
+          },
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: async () => ([
+          {
+            id: 'doc-2',
+            title: 'Archiviertes Dokument',
+            mime_type: 'text/plain',
+            created_at: '2026-05-01T10:00:00',
+            updated_at: '2026-05-01T10:10:00',
+            latest_version_id: 'ver-2',
+            import_status: 'chunked',
+            lifecycle_status: 'archived',
+            version_count: 1,
+            chunk_count: 2,
+          },
+        ]),
+      });
+
+    renderPage();
+
+    expect(await screen.findByText('Aktives Dokument')).toBeInTheDocument();
+    expect(screen.getByText(/Archivierte Dokumente erscheinen nicht in Suche oder Chat/i)).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /deleted/i })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Statusfilter'), { target: { value: 'archived' } });
+
+    expect(await screen.findByText('Archiviertes Dokument')).toBeInTheDocument();
+    expect(screen.getByText('archived')).toBeInTheDocument();
+    expect(globalThis.fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/documents?limit=20&offset=0&lifecycle_status=archived'),
+      expect.any(Object),
+    );
   });
 });

@@ -176,6 +176,9 @@ def test_rag_chat_service_runs_full_flow_and_persists_cited_answer() -> None:
     assert assistant["basis_type"] == "knowledge_base"
     assert assistant["citations"][0].chunk_id == "chunk-1"
     assert assistant["citations"][0].document_id == "doc-1"
+    assert assistant["citations"][0].document_title == "Arbeitsvertrag Hybridmodell"
+    assert assistant["citations"][0].quote_preview is not None
+    assert assistant["citations"][0].source_status == "active"
     assert assistant["citations"][0].source_anchor["paragraph"] == 4
     assert response.role == "assistant"
     assert response.citations[0].chunk_id == "chunk-1"

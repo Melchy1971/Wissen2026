@@ -121,6 +121,7 @@ class Chunk(Base):
     heading_path: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     anchor: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    is_searchable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     search_vector: Mapped[str | None] = mapped_column(
         TSVECTOR().with_variant(Text(), "sqlite"),
         nullable=True,
@@ -170,12 +171,21 @@ class ChatMessage(Base):
 
 class ChatCitation(Base):
     __tablename__ = "chat_citations"
+    __table_args__ = (
+        CheckConstraint(
+            "source_status in ('active', 'archived', 'deleted', 'unknown')",
+            name="ck_chat_citations_source_status_allowed",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     message_id: Mapped[str] = mapped_column(String, ForeignKey("chat_messages.id", ondelete="CASCADE"), nullable=False)
-    chunk_id: Mapped[str] = mapped_column(String, ForeignKey("document_chunks.id", ondelete="RESTRICT"), nullable=False)
+    chunk_id: Mapped[str | None] = mapped_column(String, ForeignKey("document_chunks.id", ondelete="SET NULL"), nullable=True)
     document_id: Mapped[str] = mapped_column(String, ForeignKey("documents.id", ondelete="RESTRICT"), nullable=False)
+    document_title: Mapped[str] = mapped_column(String(500), nullable=False)
+    quote_preview: Mapped[str] = mapped_column(Text, nullable=False)
     source_anchor: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_status: Mapped[str] = mapped_column(String(32), nullable=False, server_default="active")
 
 
 class BackgroundJob(Base):

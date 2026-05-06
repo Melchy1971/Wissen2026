@@ -35,6 +35,7 @@ DOC_FAILED_ID   = "e2000000-0000-0000-0000-000000000004"
 DOC_PENDING_ID  = "e2000000-0000-0000-0000-000000000005"
 DOC_OTHER_WS_ID = "e2000000-0000-0000-0000-000000000006"
 DOC_ARCHIVED_ID = "e2000000-0000-0000-0000-000000000007"
+DOC_DELETED_ID  = "e2000000-0000-0000-0000-000000000008"
 DOC_RANK_STRONG_ID = "e2100000-0000-0000-0000-000000000001"
 DOC_RANK_NEW_ID    = "e2100000-0000-0000-0000-000000000002"
 DOC_RANK_OLD_ID    = "e2100000-0000-0000-0000-000000000003"
@@ -50,6 +51,7 @@ VER_FAILED_ID     = "e3000000-0000-0000-0000-000000000005"
 VER_PENDING_ID    = "e3000000-0000-0000-0000-000000000006"
 VER_OTHER_WS_ID   = "e3000000-0000-0000-0000-000000000007"
 VER_ARCHIVED_ID   = "e3000000-0000-0000-0000-000000000008"
+VER_DELETED_ID    = "e3000000-0000-0000-0000-000000000009"
 VER_RANK_STRONG_ID = "e3100000-0000-0000-0000-000000000001"
 VER_RANK_NEW_ID    = "e3100000-0000-0000-0000-000000000002"
 VER_RANK_OLD_ID    = "e3100000-0000-0000-0000-000000000003"
@@ -65,6 +67,7 @@ CHUNK_FAILED_ID     = "e4000000-0000-0000-0000-000000000005"
 CHUNK_PENDING_ID    = "e4000000-0000-0000-0000-000000000006"
 CHUNK_OTHER_WS_ID   = "e4000000-0000-0000-0000-000000000007"
 CHUNK_ARCHIVED_ID   = "e4000000-0000-0000-0000-000000000008"
+CHUNK_DELETED_ID    = "e4000000-0000-0000-0000-000000000009"
 CHUNK_RANK_STRONG_ID = "e4100000-0000-0000-0000-000000000001"
 CHUNK_RANK_NEW_ID    = "e4100000-0000-0000-0000-000000000002"
 CHUNK_RANK_OLD_ID    = "e4100000-0000-0000-0000-000000000003"
@@ -138,6 +141,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (DOC_PENDING_ID,  WORKSPACE_ID, USER_ID, "Pending Doc",    "hash-m3b-pending"),
                 (DOC_OTHER_WS_ID, OTHER_WS_ID,  USER_ID, "Other WS Doc",   "hash-m3b-other-ws"),
                 (DOC_ARCHIVED_ID, WORKSPACE_ID, USER_ID, "Archived Doc",   "hash-m3b-archived"),
+                (DOC_DELETED_ID,  WORKSPACE_ID, USER_ID, "Deleted Doc",    "hash-m3b-deleted"),
             ],
         )
         cur.executemany(
@@ -228,6 +232,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (VER_PENDING_ID,    DOC_PENDING_ID,  1, "# Pending",           "md-hash-pending"),
                 (VER_OTHER_WS_ID,   DOC_OTHER_WS_ID, 1, "# Other WS",         "md-hash-other-ws"),
                 (VER_ARCHIVED_ID,   DOC_ARCHIVED_ID, 1, "# Archived",         "md-hash-archived"),
+                (VER_DELETED_ID,    DOC_DELETED_ID,  1, "# Deleted",          "md-hash-deleted"),
             ],
         )
         cur.executemany(
@@ -260,6 +265,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (VER_PENDING_ID,  DOC_PENDING_ID),
                 (VER_OTHER_WS_ID, DOC_OTHER_WS_ID),
                 (VER_ARCHIVED_ID, DOC_ARCHIVED_ID),
+                (VER_DELETED_ID,  DOC_DELETED_ID),
                 (VER_RANK_STRONG_ID, DOC_RANK_STRONG_ID),
                 (VER_RANK_NEW_ID, DOC_RANK_NEW_ID),
                 (VER_RANK_OLD_ID, DOC_RANK_OLD_ID),
@@ -280,6 +286,7 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 ("pending", DOC_PENDING_ID),
                 ("chunked", DOC_OTHER_WS_ID),
                 ("chunked", DOC_ARCHIVED_ID),
+                ("chunked", DOC_DELETED_ID),
                 ("chunked", DOC_RANK_STRONG_ID),
                 ("chunked", DOC_RANK_NEW_ID),
                 ("chunked", DOC_RANK_OLD_ID),
@@ -334,6 +341,10 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
                 (CHUNK_ARCHIVED_ID,   DOC_ARCHIVED_ID, VER_ARCHIVED_ID,   0,
                  "anchor-archived",  "archivedcontent archived knowledge should not be retrieved",
                  "archivedcontent archived knowledge should not be retrieved", _NULL_SOURCE_ANCHOR),
+                # Deleted document: excluded by lifecycle filter
+                (CHUNK_DELETED_ID,    DOC_DELETED_ID,  VER_DELETED_ID,    0,
+                 "anchor-deleted",   "deletedcontent deleted knowledge should not be retrieved",
+                 "deletedcontent deleted knowledge should not be retrieved", _NULL_SOURCE_ANCHOR),
                 # Ranking regression data:
                 # - strong chunk wins by rank because both query terms repeat.
                 # - all following chunks have identical content and rank.
@@ -361,6 +372,10 @@ def _insert_test_data(conn: psycopg.Connection) -> None:
         cur.execute(
             "UPDATE documents SET lifecycle_status = 'archived', archived_at = now() WHERE id = %s::uuid",
             (DOC_ARCHIVED_ID,),
+        )
+        cur.execute(
+            "UPDATE documents SET lifecycle_status = 'deleted', deleted_at = now() WHERE id = %s::uuid",
+            (DOC_DELETED_ID,),
         )
 
         created = datetime(2026, 5, 1, 10, 0, tzinfo=UTC)
@@ -602,6 +617,16 @@ def test_search_excludes_archived_documents(client: TestClient) -> None:
     assert response.json() == []
 
 
+def test_search_excludes_deleted_documents(client: TestClient) -> None:
+    response = client.get(
+        "/api/v1/search/chunks",
+        params={"workspace_id": WORKSPACE_ID, "q": "deletedcontent"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_search_excludes_other_workspace_chunks(client: TestClient) -> None:
     # "exclusiveterm" only exists in OTHER_WS_ID; querying WORKSPACE_ID returns nothing
     response = client.get(
@@ -680,4 +705,5 @@ def test_search_index_rebuild_recreates_missing_index_and_search_still_returns_r
     chunk_ids = [row["chunk_id"] for row in response.json()]
     assert CHUNK_PYTHON_ID in chunk_ids
     assert CHUNK_ARCHIVED_ID not in chunk_ids
+    assert CHUNK_DELETED_ID not in chunk_ids
     assert "programming language used for software development" not in caplog.text

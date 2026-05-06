@@ -147,6 +147,8 @@ def test_create_message_persists_citations(chat_session: Session) -> None:
             ChatCitationPayload(
                 chunk_id="chunk-1",
                 document_id="doc-1",
+                document_title="Current Document",
+                quote_preview="Chunk body text for citation support.",
                 source_anchor={"type": "text", "page": None, "paragraph": None, "char_start": 0, "char_end": 34},
             )
         ],
@@ -157,6 +159,9 @@ def test_create_message_persists_citations(chat_session: Session) -> None:
     assert len(citations) == 1
     assert citations[0].chunk_id == "chunk-1"
     assert citations[0].document_id == "doc-1"
+    assert citations[0].document_title == "Current Document"
+    assert citations[0].quote_preview == "Chunk body text for citation support."
+    assert citations[0].source_status == "active"
 
 
 def test_delete_of_cited_document_chunk_is_restricted(chat_session: Session) -> None:
@@ -170,6 +175,8 @@ def test_delete_of_cited_document_chunk_is_restricted(chat_session: Session) -> 
             ChatCitationPayload(
                 chunk_id="chunk-1",
                 document_id="doc-1",
+                document_title="Current Document",
+                quote_preview="Chunk body text for citation support.",
                 source_anchor={"type": "text", "page": None, "paragraph": None, "char_start": 0, "char_end": 34},
             )
         ],
@@ -179,9 +186,59 @@ def test_delete_of_cited_document_chunk_is_restricted(chat_session: Session) -> 
     chunk = chat_session.get(Chunk, "chunk-1")
     assert chunk is not None
     chat_session.delete(chunk)
+    chat_session.commit()
+
+    persisted = service.list_citations(message_id=message.id)
+    assert persisted[0].chunk_id is None
+    assert persisted[0].quote_preview == "Chunk body text for citation support."
+
+
+def test_delete_of_cited_document_is_restricted(chat_session: Session) -> None:
+    service = ChatPersistenceService(chat_session)
+    created_session = service.create_session(workspace_id="workspace-1", title="Chat", owner_user_id="user-1")
+    message = service.create_message(
+        session_id=created_session.id,
+        role="assistant",
+        content="Antwort mit Quelle",
+        citations=[
+            ChatCitationPayload(
+                chunk_id="chunk-1",
+                document_id="doc-1",
+                document_title="Current Document",
+                quote_preview="Chunk body text for citation support.",
+                source_anchor={"type": "text", "page": None, "paragraph": None, "char_start": 0, "char_end": 34},
+            )
+        ],
+    )
+    assert chat_session.get(ChatCitation, chat_session.scalar(select(ChatCitation.id).where(ChatCitation.message_id == message.id))) is not None
+
+    document = chat_session.get(Document, "doc-1")
+    assert document is not None
+    chat_session.delete(document)
     with pytest.raises(IntegrityError):
         chat_session.commit()
     chat_session.rollback()
+
+
+def test_service_rejects_citation_without_snapshot_fields(chat_session: Session) -> None:
+    service = ChatPersistenceService(chat_session)
+    created_session = service.create_session(workspace_id="workspace-1", title="Chat", owner_user_id="user-1")
+
+    with pytest.raises(ChatPersistenceError, match="citation document_title must not be blank"):
+        service.create_message(
+            session_id=created_session.id,
+            role="assistant",
+            content="Antwort mit Quelle",
+            citations=[
+                ChatCitationPayload(
+                    chunk_id="chunk-1",
+                    document_id="doc-1",
+                    document_title=" ",
+                    quote_preview="Chunk body text for citation support.",
+                    source_anchor={"type": "text", "page": None, "paragraph": None, "char_start": 0, "char_end": 34},
+                )
+            ],
+        )
 
 
 def test_service_rejects_invalid_inputs(chat_session: Session) -> None:

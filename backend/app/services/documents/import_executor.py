@@ -15,7 +15,7 @@ from app.core.errors import (
     UnsupportedFileTypeApiError,
 )
 from app.models.import_models import ImportRequest
-from app.observability.logging import bind_observability_context, log_event
+from app.observability.logging import bind_observability_context, log_import_event
 from app.services.chunking_service import ChunkingError
 from app.services.documents.import_persistence_service import DocumentImportPersistenceService
 from app.services.import_service import ImportService
@@ -73,6 +73,20 @@ def title_from_filename(filename: str) -> str:
     return title or "Untitled"
 
 
+def parser_type_from_mime_type(mime_type: str) -> str:
+    if mime_type == "text/plain":
+        return "txt-parser"
+    if mime_type in {"text/markdown", "text/x-markdown", "text/md"}:
+        return "markdown-parser"
+    if mime_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        return "docx-parser"
+    if mime_type == "application/msword":
+        return "doc-parser"
+    if mime_type == "application/pdf":
+        return "pdf-parser"
+    return "unknown"
+
+
 def build_import_warnings(import_result: ImportRequest | Any) -> list[dict[str, Any]]:
     warnings: list[dict[str, Any]] = []
     for error in import_result.errors:
@@ -102,10 +116,15 @@ class ImportExecutor:
     ) -> dict[str, Any]:
         start_time = perf_counter()
         bind_observability_context(workspace_id=workspace_id, user_id=user_id)
-        log_event(
-            "document_upload_started",
+        parser_type = parser_type_from_mime_type(mime_type)
+        parsing_start = perf_counter()
+        log_import_event(
+            "parsing_started",
+            document_id=None,
             workspace_id=workspace_id,
-            user_id=user_id,
+            duration_ms=0,
+            parser_type=parser_type,
+            chunk_count=0,
             status="started",
         )
 
@@ -114,21 +133,25 @@ class ImportExecutor:
             import_result = build_import_service().import_document(request)
         except ApiError:
             duration_ms = int((perf_counter() - start_time) * 1000)
-            log_event(
-                "document_upload_failed",
+            log_import_event(
+                "import_failed",
+                document_id=None,
                 workspace_id=workspace_id,
-                user_id=user_id,
                 duration_ms=duration_ms,
+                parser_type=parser_type,
+                chunk_count=0,
                 status="failed",
             )
             raise
         except Exception as exc:
             duration_ms = int((perf_counter() - start_time) * 1000)
-            log_event(
-                "document_upload_failed",
+            log_import_event(
+                "import_failed",
+                document_id=None,
                 workspace_id=workspace_id,
-                user_id=user_id,
                 duration_ms=duration_ms,
+                parser_type=parser_type,
+                chunk_count=0,
                 status="failed",
                 error_code="IMPORT_FAILED",
             )
@@ -136,6 +159,18 @@ class ImportExecutor:
                 message="Import pipeline crashed unexpectedly",
                 details={"filename": filename, "mime_type": mime_type},
             ) from exc
+
+        parsing_duration_ms = int((perf_counter() - parsing_start) * 1000)
+        parser_type = parser_type_from_import_result(import_result)
+        log_import_event(
+            "parsing_completed",
+            document_id=None,
+            workspace_id=workspace_id,
+            duration_ms=parsing_duration_ms,
+            parser_type=parser_type,
+            chunk_count=0,
+            status="completed",
+        )
 
         if not import_result.success or import_result.document is None:
             detail = import_result.errors[0].message if import_result.errors else "Import failed"
@@ -146,23 +181,16 @@ class ImportExecutor:
                 "mime_type": mime_type,
                 "import_errors": [error.model_dump() for error in import_result.errors],
             }
-            log_event(
-                "document_upload_failed",
+            log_import_event(
+                "import_failed",
+                document_id=None,
                 workspace_id=workspace_id,
-                user_id=user_id,
                 duration_ms=duration_ms,
+                parser_type=parser_type,
+                chunk_count=0,
                 status="failed",
                 error_code=error_code.upper(),
             )
-            if error_code == "parser_failed":
-                log_event(
-                    "parser_failed",
-                    workspace_id=workspace_id,
-                    user_id=user_id,
-                    duration_ms=duration_ms,
-                    status="failed",
-                    error_code="PARSER_FAILED",
-                )
             if error_code == "ocr_failed":
                 raise OcrRequiredApiError(message=detail, details=details)
             if error_code == "unsupported_type":
@@ -182,54 +210,11 @@ class ImportExecutor:
                 document=import_result.document,
             )
         except ChunkingError as exc:
-            duration_ms = int((perf_counter() - start_time) * 1000)
-            log_event(
-                "document_upload_failed",
-                workspace_id=workspace_id,
-                user_id=user_id,
-                duration_ms=duration_ms,
-                status="failed",
-                error_code="PARSER_FAILED",
-            )
-            log_event(
-                "parser_failed",
-                workspace_id=workspace_id,
-                user_id=user_id,
-                duration_ms=duration_ms,
-                status="failed",
-                error_code="PARSER_FAILED",
-            )
             raise ParserFailedApiError(message=str(exc), details={"filename": filename}) from exc
         except ApiError:
             raise
         except Exception as exc:
-            duration_ms = int((perf_counter() - start_time) * 1000)
-            log_event(
-                "document_upload_failed",
-                workspace_id=workspace_id,
-                user_id=user_id,
-                duration_ms=duration_ms,
-                status="failed",
-                error_code="IMPORT_FAILED",
-            )
             raise ServiceUnavailableApiError(message="Import persistence failed") from exc
-
-        duration_ms = int((perf_counter() - start_time) * 1000)
-        if persisted.duplicate_existing:
-            log_event(
-                "duplicate_detected",
-                workspace_id=workspace_id,
-                user_id=user_id,
-                duration_ms=duration_ms,
-                status="duplicate",
-            )
-        log_event(
-            "document_upload_completed",
-            workspace_id=workspace_id,
-            user_id=user_id,
-            duration_ms=duration_ms,
-            status="completed",
-        )
 
         return {
             "document_id": persisted.document_id,

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from time import perf_counter
 from uuid import uuid4
 
 import psycopg
@@ -7,6 +8,7 @@ from psycopg.types.json import Jsonb
 
 from app.core.database import get_connection
 from app.models.import_models import NormalizedDocument
+from app.observability.logging import log_import_event
 from app.services.chunking_service import MarkdownChunkingService
 
 
@@ -78,117 +80,185 @@ class DocumentImportPersistenceService:
     ) -> PersistedImportDocument:
         document_id = str(uuid4())
         version_id = str(uuid4())
-        version_chunks = self._chunking_service.chunk(
-            document.normalized_markdown,
-            document_version_id=version_id,
-            source_anchor_type=source_anchor_type_for_document(document),
+        parser_type = parser_type_from_document(document)
+        chunking_start = perf_counter()
+        log_import_event(
+            "chunking_started",
+            document_id=document_id,
+            workspace_id=workspace_id,
+            duration_ms=0,
+            parser_type=parser_type,
+            chunk_count=0,
+            status="started",
+        )
+        try:
+            version_chunks = self._chunking_service.chunk(
+                document.normalized_markdown,
+                document_version_id=version_id,
+                source_anchor_type=source_anchor_type_for_document(document),
+            )
+        except Exception as exc:
+            log_import_event(
+                "import_failed",
+                document_id=document_id,
+                workspace_id=workspace_id,
+                duration_ms=int((perf_counter() - chunking_start) * 1000),
+                parser_type=parser_type,
+                chunk_count=0,
+                status="failed",
+                error_code="CHUNKING_FAILED",
+            )
+            raise
+        chunk_count = len(version_chunks)
+        log_import_event(
+            "chunking_completed",
+            document_id=document_id,
+            workspace_id=workspace_id,
+            duration_ms=int((perf_counter() - chunking_start) * 1000),
+            parser_type=parser_type,
+            chunk_count=chunk_count,
+            status="completed",
         )
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                insert into documents (
-                    id,
-                    workspace_id,
-                    owner_user_id,
-                    title,
-                    source_type,
-                    mime_type,
-                    content_hash,
-                    import_status
-                )
-                values (%s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    document_id,
-                    workspace_id,
-                    owner_user_id,
-                    title,
-                    "upload",
-                    mime_type,
-                    content_hash,
-                    "pending",
-                ),
-            )
-            cursor.execute(
-                """
-                insert into document_versions (
-                    id,
-                    document_id,
-                    version_number,
-                    normalized_markdown,
-                    markdown_hash,
-                    parser_version,
-                    ocr_used,
-                    ki_provider,
-                    ki_model,
-                    metadata
-                )
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    version_id,
-                    document_id,
-                    1,
-                    document.normalized_markdown,
-                    document.markdown_hash,
-                    document.parser_version or "unknown",
-                    document.ocr_used,
-                    document.ki_provider,
-                    document.ki_model,
-                    Jsonb(document.metadata),
-                ),
-            )
-            cursor.execute(
-                "update documents set current_version_id = %s, import_status = %s, updated_at = now() where id = %s",
-                (version_id, "parsed", document_id),
-            )
+        indexing_start = perf_counter()
+        log_import_event(
+            "indexing_started",
+            document_id=document_id,
+            workspace_id=workspace_id,
+            duration_ms=0,
+            parser_type=parser_type,
+            chunk_count=chunk_count,
+            status="started",
+        )
 
-            chunk_rows = [
-                (
-                    str(uuid4()),
-                    document_id,
-                    version_id,
-                    chunk.chunk_index,
-                    Jsonb(chunk.heading_path),
-                    chunk.anchor,
-                    chunk.content,
-                    chunk.content_hash,
-                    chunk.token_estimate,
-                    Jsonb(chunk.metadata),
-                )
-                for chunk in version_chunks
-            ]
-            if chunk_rows:
-                cursor.executemany(
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
                     """
-                    insert into document_chunks (
+                    insert into documents (
+                        id,
+                        workspace_id,
+                        owner_user_id,
+                        title,
+                        source_type,
+                        mime_type,
+                        content_hash,
+                        import_status
+                    )
+                    values (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        document_id,
+                        workspace_id,
+                        owner_user_id,
+                        title,
+                        "upload",
+                        mime_type,
+                        content_hash,
+                        "pending",
+                    ),
+                )
+                cursor.execute(
+                    """
+                    insert into document_versions (
                         id,
                         document_id,
-                        document_version_id,
-                        chunk_index,
-                        heading_path,
-                        anchor,
-                        content,
-                        content_hash,
-                        token_estimate,
+                        version_number,
+                        normalized_markdown,
+                        markdown_hash,
+                        parser_version,
+                        ocr_used,
+                        ki_provider,
+                        ki_model,
                         metadata
                     )
                     values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    chunk_rows,
+                    (
+                        version_id,
+                        document_id,
+                        1,
+                        document.normalized_markdown,
+                        document.markdown_hash,
+                        document.parser_version or "unknown",
+                        document.ocr_used,
+                        document.ki_provider,
+                        document.ki_model,
+                        Jsonb(document.metadata),
+                    ),
+                )
+                cursor.execute(
+                    "update documents set current_version_id = %s, import_status = %s, updated_at = now() where id = %s",
+                    (version_id, "parsed", document_id),
                 )
 
-            cursor.execute(
-                "update documents set import_status = %s, updated_at = now() where id = %s",
-                ("chunked", document_id),
+                chunk_rows = [
+                    (
+                        str(uuid4()),
+                        document_id,
+                        version_id,
+                        chunk.chunk_index,
+                        Jsonb(chunk.heading_path),
+                        chunk.anchor,
+                        chunk.content,
+                        chunk.content_hash,
+                        chunk.token_estimate,
+                        Jsonb(chunk.metadata),
+                    )
+                    for chunk in version_chunks
+                ]
+                if chunk_rows:
+                    cursor.executemany(
+                        """
+                        insert into document_chunks (
+                            id,
+                            document_id,
+                            document_version_id,
+                            chunk_index,
+                            heading_path,
+                            anchor,
+                            content,
+                            content_hash,
+                            token_estimate,
+                            metadata
+                        )
+                        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        """,
+                        chunk_rows,
+                    )
+
+                cursor.execute(
+                    "update documents set import_status = %s, updated_at = now() where id = %s",
+                    ("chunked", document_id),
+                )
+        except Exception:
+            log_import_event(
+                "import_failed",
+                document_id=document_id,
+                workspace_id=workspace_id,
+                duration_ms=int((perf_counter() - indexing_start) * 1000),
+                parser_type=parser_type,
+                chunk_count=chunk_count,
+                status="failed",
+                error_code="INDEXING_FAILED",
             )
+            raise
+
+        log_import_event(
+            "indexing_completed",
+            document_id=document_id,
+            workspace_id=workspace_id,
+            duration_ms=int((perf_counter() - indexing_start) * 1000),
+            parser_type=parser_type,
+            chunk_count=chunk_count,
+            status="completed",
+        )
 
         return PersistedImportDocument(
             document_id=document_id,
             version_id=version_id,
             title=title,
-            chunk_count=len(version_chunks),
+            chunk_count=chunk_count,
             duplicate_existing=False,
             import_status="chunked",
         )
@@ -244,3 +314,12 @@ def source_anchor_type_for_document(document: NormalizedDocument) -> str:
     if mime_type.startswith("text/") or parser_name:
         return "text"
     return "legacy_unknown"
+
+
+def parser_type_from_document(document: NormalizedDocument) -> str:
+    parser_name = document.metadata.get("parser_name") if isinstance(document.metadata, dict) else None
+    if isinstance(parser_name, str) and parser_name.strip():
+        return parser_name.strip()
+    if isinstance(document.parser_version, str) and document.parser_version.strip():
+        return document.parser_version.strip()
+    return "unknown"

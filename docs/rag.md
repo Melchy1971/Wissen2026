@@ -49,12 +49,18 @@ Der erfolgreiche M3c-Flow:
 - Archivierte Dokumente liefern keine neuen Retrieval-Treffer mehr.
 - Soft-geloeschte Dokumente liefern ebenfalls keine neuen Retrieval-Treffer mehr.
 - Bereits gespeicherte Chat-Citations bleiben historisch sichtbar, auch wenn das referenzierte Dokument spaeter geloescht wurde.
+- Bereits gespeicherte Chat-Citations bleiben ebenfalls fuer spaeter archivierte Dokumente sichtbar und tragen dazu `source_status`.
 
 Citation-Historie:
 
 - `chat_citations` bleibt append-only Teil des Chatverlaufs.
 - Die API filtert historische Citations fuer geloeschte Dokumente nicht nachtraeglich weg.
 - Dadurch bleibt die Nachvollziehbarkeit alter Antworten erhalten, auch wenn das aktuelle Dokument nicht mehr ueber Read-API oder Search erreichbar ist.
+
+Nachweisgrenze:
+
+- Historische Citation-Stabilitaet ist direkt getestet.
+- Dass neue Chat-Antworten keine archivierten oder geloeschten Dokumente mehr verwenden, ist derzeit nur indirekt ueber den Retrieval-/Search-Ausschluss nachgewiesen.
 
 ## Fehlerverhalten
 
@@ -97,3 +103,4 @@ Alle Fehler verwenden das API-Error-Envelope.
 Bekannte Einschraenkung aus M4c:
 
 - Historische Citations koennen auf Dokumente zeigen, die inzwischen archiviert oder geloescht wurden; das ist beabsichtigt und kein Datenfehler.
+- Ein eigener Lifecycle-End-to-End-Test fuer den Chat-Antwortpfad fehlt derzeit noch.

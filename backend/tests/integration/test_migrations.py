@@ -131,7 +131,24 @@ def test_chunk_search_vector_migration_creates_generated_column_and_gin_index(te
                 column_row = cursor.fetchone()
                 assert column_row is not None
                 assert column_row[0] == "tsvector"
-                assert "to_tsvector('simple'::regconfig, COALESCE(content, ''::text))" in column_row[1]
+                assert (
+                    "to_tsvector('simple'::regconfig, CASE WHEN is_searchable THEN COALESCE(content, ''::text) "
+                    "ELSE ''::text END)" in column_row[1]
+                )
+
+                cursor.execute(
+                    """
+                    select data_type, column_default, is_nullable
+                    from information_schema.columns
+                    where table_schema = 'public'
+                      and table_name = 'document_chunks'
+                      and column_name = 'is_searchable'
+                    """
+                )
+                searchable_row = cursor.fetchone()
+                assert searchable_row is not None
+                assert searchable_row[0] == "boolean"
+                assert searchable_row[2] == "NO"
 
                 cursor.execute(
                     """

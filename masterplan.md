@@ -853,6 +853,7 @@ Diese Themen duerfen erst wieder aktiv geplant oder implementiert werden, wenn `
 - Workspace-Isolation in API, Datenmodell, Query-Pfaden und GUI hart absichern.
 - Upload-GUI fuer den bestehenden Dokumentimport bereitstellen.
 - Dokument-Lifecycle fuer Import, Lesbarkeit, Fehlerzustand, Archivierung oder Sichtbarkeit konsistent modellieren.
+- Lifecycle-State-Machine fuer `active`, `archived` und `deleted` dokumentieren und gegen Read-, Search-, Chat- und GUI-Verhalten pruefen.
 - Admin- und Diagnoseansicht fuer Health, Fehler, Queue- oder Jobstatus und Betriebszustand bereitstellen.
 - Observability fuer Backend, Import, Retrieval und Chat standardisieren.
 - Backup/Restore fuer lokalen Betrieb definieren, dokumentieren und pruefen.
@@ -872,11 +873,40 @@ Diese Themen duerfen erst wieder aktiv geplant oder implementiert werden, wenn `
 - Zugriff auf das lokale System ist ueber ein definiertes Benutzerkonzept abgesichert.
 - Workspaces sind in API, Datenhaltung und GUI wirksam voneinander isoliert.
 - Dokumente koennen ueber eine GUI hochgeladen und ueber ihren Lifecycle nachvollziehbar verfolgt werden.
-- Admin- und Diagnoseansicht machen den lokalen Systemzustand ohne Datenbankdirektzugriff sichtbar.
+- Historische Citations bleiben bei archivierten oder geloeschten Dokumenten lesbar; neue Retrieval-Treffer bleiben auf `active` beschraenkt.
+
+Aktueller M4-Gate-Stand am 2026-05-06:
+
+| Bereich | Score | Status | Gate-Relevanz |
+|---|---:|---|---|
+| M4a | `82/100` | nicht abgeschlossen | blockiert M5 |
+| M4b | `88/100` | nicht abgeschlossen | blockiert M5 |
+| M4c | `86/100` | nicht abgeschlossen | blockiert M5 |
+| M4d | `58/100` | nur teilweise real implementiert | `No-Go` |
+| M4e | `18/100` | Konzept, nicht implementiert | `No-Go` |
+
+Gate-Regel fuer M5:
+
+- `M4a >= 95`
+- `M4b >= 90`
+- `M4c >= 90`
+
+Aktuelles Ergebnis:
+
+- M4 ist **teilweise stabil**.
+- M5 bleibt blockiert.
+
+Aktueller M4c-Befund:
+
+- Backend-Lifecycle-, Soft-Delete- und Citation-Slices sind im fokussierten Testlauf gruen.
+- Frontend-Lifecycle-Slice ist im fokussierten Vitest-Lauf gruen.
+- Search- und Reindex-Integrationslauf gegen PostgreSQL ist aktuell nicht erfolgreich, weil die konfigurierte Test-Datenbank im letzten Lauf nicht erreichbar war.
+- Der M4c-Produktstatus bleibt deshalb vorerst `nicht abgeschlossen`.
+- Admin- und Diagnoseansicht sind nur teilweise real vorhanden; ein aggregierter Diagnostics-Vertrag ist dokumentiert, aber nicht implementiert.
 - Zentrale Fehler, Health-Informationen und Betriebsmetriken sind beobachtbar.
-- Backup und dokumentierter Restore sind lokal erfolgreich pruefbar.
+- Backup und Restore sind aktuell als Konzept und Runbook beschrieben, aber nicht real implementiert oder getestet.
 - Read-, Retrieval- und Chat-Pfade halten definierte lokale Performancebudgets ein.
-- Deployment- und Betriebsdokumentation reicht aus, um das System reproduzierbar lokal bereitzustellen und wiederherzustellen.
+- Deployment- und Betriebsdokumentation reicht fuer lokalen Betrieb, nicht aber fuer einen nachgewiesenen Restore-Fall.
 
 ### Risiken
 
@@ -888,9 +918,15 @@ Diese Themen duerfen erst wieder aktiv geplant oder implementiert werden, wenn `
 - Performance-Haertung verschiebt sich auf spaeter und laesst produktionsnahe lokale Lastprobleme bestehen.
 - M4 verwischt die Grenze zu M5 und zieht wieder neue Fachlogik statt Produktisierung nach.
 
+Freigabeentscheidung:
+
+- Go fuer M4d: `No-Go`
+- Go fuer M4e: `No-Go`
+- Go fuer M5: `No-Go`
+
 ### M4a - Authentifizierung und Workspace-Isolation
 
-**Status:** missing.
+**Status:** partial, nicht freigegeben.
 
 **Ziel:** Jede API-Anfrage muss eindeutig einem Benutzer und einem autorisierten Workspace-Kontext zugeordnet sein.
 

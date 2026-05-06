@@ -18,6 +18,7 @@ Die GUI ist als read-only Basis umgesetzt, wurde fuer M3b um Retrieval-Suche erw
 - Route `/chat` und `/chat/:id` fuer Chat-Sessions.
 - Upload-Block auf `/documents` mit Hintergrundjob-Polling.
 - Admin-Diagnostik fuer Search-Index-Rebuild mit Hintergrundjob-Polling.
+- Lifecycle-Filter, Archive, Restore und Soft-Delete in der Dokument-GUI.
 - Sessionliste fuer Chat.
 - Formular fuer neue Session.
 - Frageformular fuer Chat-Nachrichten.
@@ -69,6 +70,30 @@ OCR-required-Verhalten:
 
 - `OCR_REQUIRED` wird im allgemeinen Fehlerzustand angezeigt.
 - Es gibt keinen spezialisierten OCR-Hinweis mit erklaerter Nicht-Scope-Folgeaktion.
+
+## M4c Lifecycle-GUI im aktuellen Stand
+
+Nachweisbar implementiert:
+
+- Dokumentliste filtert zwischen `active` und `archived`.
+- `deleted` wird in der GUI nicht als eigener Filter angeboten.
+- Dokumentdetail zeigt Lifecycle-Badge und Lifecycle-Hinweis.
+- aktive Dokumente koennen archiviert werden.
+- archivierte Dokumente koennen wiederhergestellt werden.
+- Dokumente koennen per GUI soft-geloescht werden.
+- nach Archive und Restore wird der Detailzustand neu geladen.
+- nach Soft-Delete navigiert die GUI zur Dokumentliste zurueck.
+
+Nachweisbar nicht umgesetzt:
+
+- keine GUI fuer geloeschte Dokumente
+- keine Admin-Restore- oder Purge-Funktion fuer `deleted`
+- kein eigener Frontend-Flow fuer historische Citations ueber den bereits angezeigten Chatverlauf hinaus
+
+Bekannte Einschraenkungen im Lifecycle-Slice:
+
+- Die GUI dokumentiert, dass archivierte Dokumente nicht in Suche oder Chat erscheinen, stützt sich dafuer aber auf Backend-Verhalten statt auf eigenen Browser-E2E-Nachweis.
+- Der Lifecycle-Slice ist ueber Screen-Tests verifiziert, nicht ueber Browser-E2E gegen ein laufendes Gesamtsystem.
 
 ## Bewusst nicht umgesetzt
 
@@ -138,4 +163,4 @@ Nicht nachweisbar implementiert:
 
 ## Fazit
 
-Der Frontend-Schnitt deckt Dokumente, Suche, Chat sowie erste M4-Produktisierungs-Slices fuer Upload und Admin-Rebuild ab. Der Upload-Flow selbst ist sichtbar und testbar, ist auth-gebunden und kompatibel mit dem aktuellen `202 + Jobstatus`-Vertrag. M4b ist aber noch nicht konsistent abgeschlossen, weil `warnings`, Direktnavigation ins Dokumentdetail und die Bereinigung alter Workspace-Query-Modelle noch offen sind.
+Der Frontend-Schnitt deckt Dokumente, Suche, Chat sowie erste M4-Produktisierungs-Slices fuer Upload, Lifecycle und Admin-Rebuild ab. Der Lifecycle-Flow fuer Dokumentliste und Dokumentdetail ist ueber Screen-Tests nachgewiesen. M4b bleibt dennoch nicht abgeschlossen, weil `warnings`, Direktnavigation ins Dokumentdetail und die Bereinigung alter Workspace-Query-Modelle noch offen sind.

@@ -17,15 +17,16 @@ export function DocumentsPage() {
   const [searchState, setSearchState] = useState({ status: 'idle', items: [], error: null, query: '' });
   const [uploadState, setUploadState] = useState({ status: 'idle', fileName: '', job: null, result: null, error: null });
   const [queryInput, setQueryInput] = useState('');
+  const [lifecycleFilter, setLifecycleFilter] = useState('active');
   const pollTimeoutRef = useRef(null);
   const uploadJobState = mapJobStatus(uploadState.job);
 
   async function loadDocuments({ cancelled = false } = {}) {
     setState({ status: 'loading', items: [], error: null });
     try {
-      const response = await getDocuments({ limit: 20, offset: 0 });
+      const response = await getDocuments({ limit: 20, offset: 0, lifecycleStatus: lifecycleFilter });
       if (cancelled) return;
-      const items = response.map(mapDocumentListItem);
+      const items = response.map(mapDocumentListItem).filter((item) => item.lifecycleStatus.kind !== 'deleted');
       setState({ status: 'success', items, error: null });
     } catch (error) {
       if (cancelled) return;
@@ -40,7 +41,7 @@ export function DocumentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [workspaceId]);
+  }, [workspaceId, lifecycleFilter]);
 
   useEffect(() => {
     return () => {
@@ -148,6 +149,27 @@ export function DocumentsPage() {
         </div>
         <p className="page-header__meta">Workspace: {workspaceId}</p>
       </div>
+      <section className="panel">
+        <div className="panel__header search-bar__header">
+          <div>
+            <p className="panel__eyebrow">Lifecycle</p>
+            <h3>Sichtbarkeit</h3>
+          </div>
+        </div>
+        <form className="search-bar" onSubmit={(event) => event.preventDefault()}>
+          <label className="search-bar__field">
+            <span className="search-bar__label">Statusfilter</span>
+            <select value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value)}>
+              <option value="active">Nur aktive Dokumente</option>
+              <option value="archived">Nur archivierte Dokumente</option>
+            </select>
+          </label>
+        </form>
+        <div className="chat-warning lifecycle-warning">
+          <strong>Hinweis</strong>
+          <p>Archivierte Dokumente erscheinen nicht in Suche oder Chat. Geloeschte Dokumente werden in der GUI nicht angezeigt.</p>
+        </div>
+      </section>
       <section className="panel">
         <div className="panel__header search-bar__header">
           <div>

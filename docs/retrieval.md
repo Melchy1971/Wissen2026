@@ -117,6 +117,8 @@ Lifecycle-Auswirkung:
 - Retrieval/Search arbeitet nur auf `documents.lifecycle_status = active`.
 - Archivierte Dokumente bleiben ueber die Dokumentliste erreichbar, verschwinden aber sofort aus neuen Search-Treffern.
 - Soft-geloeschte Dokumente bleiben historisch im Datenmodell, sind fuer Retrieval jedoch ausgeschlossen.
+- Reindex synchronisiert dazu die Chunk-Sichtbarkeit ueber `document_chunks.is_searchable`.
+- Historische Chat-Citations sind kein Retrieval-Modus und werden von diesen Regeln nicht rueckwirkend bereinigt.
 
 ## Sortierlogik
 
@@ -171,6 +173,7 @@ Fehlerformat:
 
 - Retrieval kennt keinen historischen Modus fuer archivierte oder geloeschte Dokumente.
 - Bereits gespeicherte Chat-Citations koennen weiter auf Dokumente verweisen, die aus dem aktuellen Retrieval nicht mehr erreichbar sind.
+- Der aktuelle PostgreSQL-Integrationslauf fuer Retrieval/Search ist nicht gruen nachgewiesen, weil die konfigurierte Test-Datenbank im letzten Lauf per Connection-Timeout nicht erreichbar war.
 
 ## Tests
 
@@ -183,5 +186,10 @@ M3b Search ist ueber PostgreSQL-Integrationstests abgesichert, die nur mit `TEST
 - Workspace-Grenze
 - Required Response Fields
 - Ranking-Regression fuer die Sortierlogik
+
+Aktueller Befund:
+
+- Der fokussierte SQLite-/Service-Slice ist gruen.
+- Der letzte End-to-End-Lauf gegen die konfigurierte PostgreSQL-Ziel-Datenbank ist nicht an fachlichem Verhalten, sondern an DB-Erreichbarkeit gescheitert.
 
 Ohne `TEST_DATABASE_URL` werden diese Tests geskippt. SQLite darf diese Tests nicht ausfuehren.

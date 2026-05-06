@@ -162,6 +162,21 @@ Stand des Abgleichs mit Code und Dokumentation am 2026-05-05:
 - M4 ist teilweise implementiert.
 - Die dafuer benoetigte M3c-Foundation ist abgeschlossen.
 
+M4 Statusmatrix am 2026-05-06:
+
+| Bereich | Score | Status |
+|---|---:|---|
+| M4a Auth & Workspace Isolation | `82/100` | nicht abgeschlossen |
+| M4b Upload/API Stabilitaet | `88/100` | nicht abgeschlossen |
+| M4c Lifecycle | `86/100` | nicht abgeschlossen |
+| M4d Diagnostics | `58/100` | nur teilweise real implementiert |
+| M4e Backup/Restore | `18/100` | Konzept, nicht implementiert |
+
+Gesamtentscheidung fuer M4:
+
+- M4 ist **teilweise stabil**.
+- M5 bleibt blockiert, bis `M4a >= 95`, `M4b >= 90` und `M4c >= 90` nachweisbar erreicht sind.
+
 Zielbild:
 
 - M4 stabilisiert den lokalen Produktbetrieb statt neue Intelligenz-Schichten einzufuehren.
@@ -223,8 +238,11 @@ Nicht-Scope, das weiterhin nicht geliefert ist:
 
 Abschlussbewertung fuer M4a:
 
+- Score: `82/100`
 - Dokumentation: jetzt aktualisiert
 - Konsistenz mit dem implementierten Code: **nicht ausreichend fuer Abschluss**
+- Teststatus: Backend-Auth- und Workspace-Schutz sind gut abgedeckt; ein gleichwertiger Frontend-Nachweis fuer einen durchgezogenen Session-Produktfluss fehlt
+- Blocker: Admin- und Teile der GUI arbeiten weiterhin mit altem Query-/Token-Modell statt mit einem voll konsistenten M4a-Session-Kontext
 - Entscheidung: `nicht abgeschlossen`
 
 ### M4b Upload-GUI
@@ -288,12 +306,15 @@ Teststatus fuer M4b am 2026-05-05:
 
 - Pflicht-Uploadtests laufen ohne Skip und decken `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`, Parserfehler, OCR-Bedarf, Upload ohne Auth, Upload in fremdem Workspace und sequential duplicate ab.
 - Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist als einziger optionaler Test isoliert.
-- Aktueller Status des PostgreSQL-Race-Tests: optional `skipped`, weil die zugrunde liegende Migrationskette derzeit nicht vollstaendig aufloesbar ist.
+- Aktueller Status des PostgreSQL-Race-Tests: im letzten Lauf **nicht gruen**, sondern wegen Connection-Timeout gegen die konfigurierte PostgreSQL-Ziel-Datenbank fehlgeschlagen.
 
 Abschlussbewertung fuer M4b:
 
+- Score: `88/100`
 - Dokumentation: jetzt aktualisiert
 - Konsistenz mit dem implementierten Code: **nicht ausreichend fuer Abschluss**
+- Teststatus: Kernpfad fuer Upload, GUI-Polling und Fehlerabbildung ist gut belegt; der harte PostgreSQL-Race-Nachweis fuer Parallelitaet fehlt weiter
+- Blocker: PostgreSQL-Race-/Infra-Nachweis, fehlende `warnings`-Darstellung und kein Deep-Link in die Dokumentdetailansicht nach Erfolg
 - Entscheidung: `nicht abgeschlossen`
 
 ### M4c Dokument-Lifecycle
@@ -301,9 +322,9 @@ Abschlussbewertung fuer M4b:
 Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
 
 - Der Dokument-Lifecycle ist im Backend durchgaengig mit `active`, `archived` und `deleted` implementiert.
-- Listen-, Read-, Search- und Chat-Pfade verarbeiten diese Stati konsistent.
+- Listen- und Read-Pfade verarbeiten diese Stati konsistent.
 - Soft-Delete wird ueber `lifecycle_status = deleted` plus `deleted_at` modelliert; physische Folgeobjekte bleiben erhalten.
-- Historische Chat-Citations bleiben auch fuer spaeter geloeschte Dokumente sichtbar.
+- Historische Chat-Citations bleiben fuer spaeter archivierte oder geloeschte Dokumente sichtbar.
 
 Lifecycle-Regeln im aktuellen Stand:
 
@@ -311,14 +332,30 @@ Lifecycle-Regeln im aktuellen Stand:
 - `archived`: nur ueber Listenfilter sichtbar, nicht suchbar und nicht fuer neue Chat-Antworten retrievable
 - `deleted`: Soft-Delete, nicht mehr ueber Read-API oder Search zugreifbar
 
+Lifecycle State Machine:
+
+- `active -> archived`
+- `archived -> active`
+- `active -> deleted`
+- `archived -> deleted`
+- `deleted` ist terminal
+
 Auswirkungen auf Liste, Suche und Chat:
 
 - `GET /documents` zeigt standardmaessig nur `active`
 - `GET /documents?lifecycle_status=archived` zeigt archivierte Dokumente gezielt an
 - `deleted` ist im Listenpfad effektiv unsichtbar
 - Search schliesst alles ausser `active` aus
-- neue RAG-Antworten nutzen keine archivierten oder geloeschten Dokumente
-- bestehende Chat-Citations bleiben bei geloeschten Dokumenten historisch lesbar
+- fuer neue RAG-Antworten gibt es nur einen indirekten Nachweis ueber den Search-/Retrieval-Pfad, keinen eigenen Lifecycle-spezifischen Chat-Integrationstest
+- bestehende Chat-Citations bleiben bei archivierten und geloeschten Dokumenten historisch lesbar
+
+Reindex-Regeln:
+
+- Reindex synchronisiert `Chunk.is_searchable` an den Dokument-Lifecycle
+- aktive Dokumente werden fuer Search wieder auf `is_searchable = true` gesetzt
+- archivierte und geloeschte Dokumente werden fuer Search auf `is_searchable = false` gesetzt
+- der PostgreSQL-spezifische Reindex-Pfad ist im Unit-/Service-Slice nachgewiesen
+- der echte PostgreSQL-Integrationspfad ist aktuell nicht erfolgreich verifiziert, weil die konfigurierte Ziel-Datenbank im Testlauf per Connection-Timeout nicht erreichbar war
 
 Soft-Delete-Regeln:
 
@@ -331,27 +368,69 @@ Bekannte Einschraenkungen:
 - `lifecycle_status=deleted` ist als Querywert formal akzeptiert, liefert im Listenpfad aber keine geloeschten Dokumente zurueck
 - kein separater Purge-/Hard-Delete-Betriebsprozess
 - keine dedizierte Admin-Ansicht fuer geloeschte Dokumente
-- Lifecycle-Steuerung ist derzeit backendseitig dokumentiert, aber nicht als eigener Frontend-Management-Flow verifiziert
+- die GUI ist fuer Listenfilter, Archive, Restore und Soft-Delete ueber Vitest-Screen-Tests verifiziert
+- Search-/Reindex-Integrationsnachweise gegen PostgreSQL sind aktuell wegen nicht erreichbarer Test-Datenbank unvollstaendig
+- fuer neue Chat-Antworten gibt es keinen eigenen expliziten Lifecycle-Integrationstest jenseits des Retrieval-Ausschlusses
 
 Abschlussbewertung fuer M4c:
 
+- Score: `86/100`
 - Dokumentation: jetzt aktualisiert
-- Konsistenz mit dem implementierten Code: **ausreichend fuer Abschluss**
-- Entscheidung: `abgeschlossen`
+- Konsistenz mit dem implementierten Code: **teilweise, aber nicht vollstaendig hart abgesichert**
+- Teststatus: Backend-Lifecycle und GUI-Slice sind gruen belegbar; der PostgreSQL-End-to-End-Pfad fuer Search/Reindex ist aktuell nicht erfolgreich verifiziert
+- Blocker: fehlender gruener PostgreSQL-Integrationslauf, kein eigener Lifecycle-Chat-End-to-End-Nachweis und keine Admin-Sicht fuer `deleted`
+- Entscheidung: `nicht abgeschlossen`
+
+### M4d Diagnostics
+
+Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-06:
+
+- Real implementiert sind eine Admin-Seite fuer Search-Index-Rebuild, ein Inconsistency-Report, Health-Endpunkte und Observability-Slices.
+- Nicht real implementiert ist der in Teilen der Dokumentation beschriebene aggregierte Backend-Endpunkt `GET /api/v1/admin/diagnostics`.
+- Die aktuelle Admin-GUI arbeitet weiterhin mit manuell eingegebenem `x-admin-token` und bildet damit nicht den Zielzustand von M4a ab.
+
+Dokumentierter Zustand:
+
+- Teile der Doku beschreiben fuer M4d noch einen Zielvertrag statt den aktuellen Ist-Stand.
+- Der dokumentierte Vollvertrag fuer aggregierte Diagnostics ist derzeit nicht durch Code oder Tests gedeckt.
+
+Teststatus:
+
+- Search-Index-Rebuild und Inconsistency-Report sind backendseitig getestet.
+- Die vorhandene Admin-Seite ist ueber Screen-Tests fuer den Rebuild-Flow belegt.
+- Ein echter aggregierter Diagnostics-Endpunkt ist nicht getestet, weil er nicht implementiert ist.
+
+Abschlussbewertung fuer M4d:
+
+- Score: `58/100`
+- Dokumentation: nur teilweise konsistent mit dem aktuellen Code
+- Konsistenz mit dem implementierten Code: **nicht ausreichend fuer Abschluss**
+- Blocker: dokumentierter Zielvertrag ohne Implementierung, altes Admin-Token-Modell in der GUI, kein belastbarer Gesamt-Diagnostics-Vertrag
+- Entscheidung: `nicht abgeschlossen`
 
 ### M4e Backup/Restore
 
-Stand des Abgleichs mit Dokumentation am 2026-05-05:
+Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-06:
 
 - M4e ist als Konzept definiert.
 - Das bestehende System speichert Originaldateien aktuell noch nicht dauerhaft; ein vollstaendiges M4e-Backup erfordert daher eine neue technische Dateiablage fuer Restore-Zwecke.
 - Backup ist fuer M4e als CLI-first Betriebsprozess definiert.
 - Search-Index ist als rekonstruierbar spezifiziert, nicht als primaeres Backup-Artefakt.
+- Ein nachweisbarer Backup- oder Restore-Codepfad ist im aktuellen Repository nicht implementiert.
+- Es gibt keine echten Backup-/Restore-Tests.
 
 Entscheidung:
 
 - Status fuer M4e: `defined`
 - Implementierungsstatus: `missing`
+
+Abschlussbewertung fuer M4e:
+
+- Score: `18/100`
+- Dokumentation: als Konzept konsistent, aber nicht als Implementierung belegt
+- Teststatus: keine operativen Backup-/Restore-Tests
+- Blocker: keine CLI, keine API, keine Restore-Faehigkeit und keine persistierte Originaldatei-Kopie fuer vollstaendige Wiederherstellung
+- Entscheidung: `nicht abgeschlossen`
 
 Nicht-Scope fuer M4:
 
@@ -370,7 +449,10 @@ Abhaengigkeiten zu M3:
 Entscheidung:
 
 - Status fuer M4: `partial`
-- Startfreigabe fuer weitere M4-Slices: `Go`, aber M4a selbst bleibt offen
+- Gesamtentscheidung: `teilweise stabil`
+- Go/No-Go fuer M4d: `No-Go`
+- Go/No-Go fuer M4e: `No-Go`
+- Startfreigabe fuer weitere M4-Slices: `No-Go`, solange das M4-Gate fuer `M4a`, `M4b` und `M4c` nicht erreicht ist
 
 ## Ground Truth = Code, nicht Dokumentation
 

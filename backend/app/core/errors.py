@@ -102,6 +102,24 @@ class DocumentStateConflictApiError(ApiError):
     message = "Document state is inconsistent"
 
 
+class InvalidLifecycleTransitionApiError(ApiError):
+    status_code = 409
+    code = "INVALID_LIFECYCLE_TRANSITION"
+    message = "Invalid lifecycle transition"
+
+
+class DocumentAlreadyArchivedApiError(ApiError):
+    status_code = 409
+    code = "DOCUMENT_ALREADY_ARCHIVED"
+    message = "Document is already archived"
+
+
+class DocumentAlreadyDeletedApiError(ApiError):
+    status_code = 409
+    code = "DOCUMENT_ALREADY_DELETED"
+    message = "Document is already deleted"
+
+
 class InvalidLifecycleStatusApiError(ApiError):
     status_code = 422
     code = "INVALID_LIFECYCLE_STATUS"

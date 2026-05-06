@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 ImportStatus = Literal["pending", "parsing", "parsed", "chunked", "failed", "duplicate"]
 LifecycleStatus = Literal["active", "archived", "deleted"]
+ImportRecoveryAction = Literal["retry_parsing", "retry_chunking", "retry_indexing"]
 
 
 class DocumentListItem(BaseModel):
@@ -82,6 +83,16 @@ class DocumentLifecycleResponse(BaseModel):
     lifecycle_status: LifecycleStatus
     archived_at: datetime | None
     deleted_at: datetime | None
+
+
+class DocumentImportRecoveryResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    document_id: str
+    import_status: ImportStatus
+    current_version_id: str | None
+    chunk_count: int
+    recovery_action: ImportRecoveryAction
 
 
 class DocumentChunkSourceAnchor(BaseModel):

@@ -1,10 +1,14 @@
 import { requestJson } from './client.js';
 
-export function getDocuments({ workspaceId, limit = 20, offset = 0 }) {
+export function getDocuments({ workspaceId, limit = 20, offset = 0, lifecycleStatus } = {}) {
   const query = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   });
+
+  if (lifecycleStatus) {
+    query.set('lifecycle_status', lifecycleStatus);
+  }
 
   return requestJson(`/documents?${query.toString()}`);
 }
@@ -44,5 +48,23 @@ export function importDocument(file) {
   return requestJson('/documents/import', {
     method: 'POST',
     body: formData,
+  });
+}
+
+export function archiveDocument(id) {
+  return requestJson(`/documents/${id}/archive`, {
+    method: 'PATCH',
+  });
+}
+
+export function restoreDocument(id) {
+  return requestJson(`/documents/${id}/restore`, {
+    method: 'PATCH',
+  });
+}
+
+export function deleteDocument(id) {
+  return requestJson(`/documents/${id}`, {
+    method: 'DELETE',
   });
 }

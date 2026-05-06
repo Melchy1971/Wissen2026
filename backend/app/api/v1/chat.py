@@ -164,6 +164,8 @@ def to_citation_response(citation: ChatCitation) -> ChatCitationResponse:
     return ChatCitationResponse(
         chunk_id=citation.chunk_id,
         document_id=citation.document_id,
+        document_title=citation.document_title,
         source_anchor=citation.source_anchor,
-        quote_preview=None,
+        quote_preview=citation.quote_preview,
+        source_status=citation.source_status,
     )

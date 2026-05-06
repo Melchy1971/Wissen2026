@@ -10,26 +10,38 @@ from app.core.database import DatabaseConfigurationError
 from app.core.errors import (
     ApiError,
     BackgroundJobNotFoundApiError,
+    DocumentAlreadyArchivedApiError,
+    DocumentAlreadyDeletedApiError,
     DocumentNotFoundApiError,
     DocumentStateConflictApiError,
     FileTooLargeApiError,
+    InvalidLifecycleTransitionApiError,
     InvalidLifecycleStatusApiError,
 )
 from app.db.session import get_session
-from app.observability.logging import bind_observability_context, log_event
+from app.observability.logging import bind_observability_context, log_event, log_import_event
 from app.schemas.documents import (
     DocumentChunkPreview,
     DocumentDetail,
+    DocumentImportRecoveryResponse,
     DocumentLifecycleResponse,
     DocumentListItem,
     DocumentVersionSummary,
 )
 from app.schemas.jobs import JobResponse
-from app.services.documents.import_executor import canonical_mime_type
+from app.services.documents.import_executor import canonical_mime_type, parser_type_from_mime_type
 from app.services.documents.lifecycle_service import (
+    DocumentAlreadyArchivedError,
+    DocumentAlreadyDeletedError,
     DocumentLifecycleConflictError,
     DocumentLifecycleNotFoundError,
     DocumentLifecycleService,
+    InvalidLifecycleTransitionError,
+)
+from app.services.documents.import_recovery_service import (
+    DocumentImportRecoveryConflictError,
+    DocumentImportRecoveryNotFoundError,
+    DocumentImportRecoveryService,
 )
 from app.services.documents.read_service import DocumentNotFoundError, DocumentReadService, DocumentStateConflictError
 from app.services.jobs.background_jobs import BackgroundJobNotFoundError, BackgroundJobService, process_import_job
@@ -59,6 +71,14 @@ def get_background_job_service() -> Iterator[BackgroundJobService]:
     try:
         for session in get_session():
             yield BackgroundJobService.from_session(session)
+    except DatabaseConfigurationError as exc:
+        raise ApiError(message=str(exc)) from exc
+
+
+def get_document_import_recovery_service() -> Iterator[DocumentImportRecoveryService]:
+    try:
+        for session in get_session():
+            yield DocumentImportRecoveryService.from_session(session)
     except DatabaseConfigurationError as exc:
         raise ApiError(message=str(exc)) from exc
 
@@ -162,6 +182,12 @@ def archive_document(
         document = service.archive(document_id)
     except DocumentLifecycleNotFoundError as exc:
         raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
+    except DocumentAlreadyArchivedError as exc:
+        raise DocumentAlreadyArchivedApiError(message=str(exc), details={"document_id": document_id}) from exc
+    except DocumentAlreadyDeletedError as exc:
+        raise DocumentAlreadyDeletedApiError(message=str(exc), details={"document_id": document_id}) from exc
+    except InvalidLifecycleTransitionError as exc:
+        raise InvalidLifecycleTransitionApiError(message=str(exc), details={"document_id": document_id}) from exc
     except DocumentLifecycleConflictError as exc:
         raise DocumentStateConflictApiError(message=str(exc), details={"document_id": document_id}) from exc
     return DocumentLifecycleResponse(
@@ -182,6 +208,10 @@ def restore_document(
         document = service.restore(document_id)
     except DocumentLifecycleNotFoundError as exc:
         raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
+    except DocumentAlreadyDeletedError as exc:
+        raise DocumentAlreadyDeletedApiError(message=str(exc), details={"document_id": document_id}) from exc
+    except InvalidLifecycleTransitionError as exc:
+        raise InvalidLifecycleTransitionApiError(message=str(exc), details={"document_id": document_id}) from exc
     except DocumentLifecycleConflictError as exc:
         raise DocumentStateConflictApiError(message=str(exc), details={"document_id": document_id}) from exc
     return DocumentLifecycleResponse(
@@ -202,12 +232,33 @@ def delete_document(
         document = service.delete(document_id)
     except DocumentLifecycleNotFoundError as exc:
         raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
+    except DocumentAlreadyDeletedError as exc:
+        raise DocumentAlreadyDeletedApiError(message=str(exc), details={"document_id": document_id}) from exc
+    except InvalidLifecycleTransitionError as exc:
+        raise InvalidLifecycleTransitionApiError(message=str(exc), details={"document_id": document_id}) from exc
+    except DocumentLifecycleConflictError as exc:
+        raise DocumentStateConflictApiError(message=str(exc), details={"document_id": document_id}) from exc
     return DocumentLifecycleResponse(
         document_id=document.id,
         lifecycle_status=document.lifecycle_status,
         archived_at=document.archived_at,
         deleted_at=document.deleted_at,
     )
+
+
+@router.post("/{document_id}/retry-import", response_model=DocumentImportRecoveryResponse)
+def retry_document_import(
+    document_id: str,
+    auth_context: Annotated[AuthContext, Depends(require_workspace_member)],
+    service: Annotated[DocumentImportRecoveryService, Depends(get_document_import_recovery_service)],
+) -> DocumentImportRecoveryResponse:
+    try:
+        result = service.retry_import(document_id=document_id, workspace_id=auth_context.workspace_id)
+    except DocumentImportRecoveryNotFoundError as exc:
+        raise DocumentNotFoundApiError(details={"document_id": document_id}) from exc
+    except DocumentImportRecoveryConflictError as exc:
+        raise DocumentStateConflictApiError(message=str(exc), details={"document_id": document_id}) from exc
+    return DocumentImportRecoveryResponse.model_validate(result)
 
 
 @router.post("/import", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
@@ -225,15 +276,26 @@ async def import_document(
         source_bytes = await read_upload_with_size_limit(file, max_upload_size_bytes=settings.max_upload_size_bytes)
     except FileTooLargeApiError:
         duration_ms = int((perf_counter() - start_time) * 1000)
-        log_event(
-            "document_upload_failed",
+        log_import_event(
+            "import_failed",
+            document_id=None,
             workspace_id=auth_context.workspace_id,
-            user_id=auth_context.user_id,
             duration_ms=duration_ms,
+            parser_type=parser_type_from_mime_type(mime_type),
+            chunk_count=0,
             status="failed",
             error_code="FILE_TOO_LARGE",
         )
         raise
+    log_import_event(
+        "upload_received",
+        document_id=None,
+        workspace_id=auth_context.workspace_id,
+        duration_ms=int((perf_counter() - start_time) * 1000),
+        parser_type=parser_type_from_mime_type(mime_type),
+        chunk_count=0,
+        status="received",
+    )
     temp_file_path = BackgroundJobService.create_temp_upload_file(filename=filename, source_bytes=source_bytes)
     job = job_service.enqueue_import_job(
         workspace_id=auth_context.workspace_id,

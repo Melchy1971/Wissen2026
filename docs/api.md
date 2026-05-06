@@ -440,11 +440,27 @@ Lifecycle-Status:
 - `archived`
 - `deleted`
 
+Lifecycle State Machine:
+
+- `active --archive--> archived`
+- `archived --restore--> active`
+- `active --delete--> deleted`
+- `archived --delete--> deleted`
+- `archived --archive--> 409 DOCUMENT_ALREADY_ARCHIVED`
+- `active --restore--> 409 INVALID_LIFECYCLE_TRANSITION`
+- `deleted --archive--> 409 DOCUMENT_ALREADY_DELETED`
+- `deleted --restore--> 409 DOCUMENT_ALREADY_DELETED`
+- `deleted --delete--> 409 DOCUMENT_ALREADY_DELETED`
+
 Lifecycle-Regeln:
 
+- `archive` ist nur fuer `active` erlaubt.
+- `restore` ist nur fuer `archived` erlaubt.
+- `delete` ist immer ein Soft-Delete und loescht keine Versionen, Chunks oder historischen Citations physisch.
+- `deleted` ist terminal und ohne explizite Admin-Funktion nicht restorable.
 - `active` ist in Liste, Search, Retrieval und Chat verwendbar.
 - `archived` ist nur in der Dokumentliste mit Filter sichtbar und wird nicht in Search oder Retrieval einbezogen.
-- `deleted` ist soft deleted und weder sichtbar noch direkt abrufbar oder suchbar.
+- `deleted` ist weder sichtbar noch direkt abrufbar oder suchbar.
 - Bestehende Chat-Citations bleiben historisch sichtbar.
 
 Auswirkungen auf Liste, Suche und Chat:
@@ -452,8 +468,8 @@ Auswirkungen auf Liste, Suche und Chat:
 - Dokumentliste zeigt ohne Filter nur `active`.
 - Dokumentdetail, Versions- und Chunk-Read behandeln `deleted` wie `DOCUMENT_NOT_FOUND`.
 - Retrieval/Search lassen nur `Document.lifecycle_status == active` zu.
-- neue Chat-Antworten koennen daher nur aktive Dokumente zitieren.
-- bestehende Chat-Nachrichten behalten ihre bereits gespeicherten Citations, auch wenn das referenzierte Dokument spaeter geloescht wurde.
+- Neue Chat-Antworten koennen im implementierten Pfad nur Treffer aus dem Search-/Retrieval-Pfad zitieren; ein eigener Lifecycle-Integrationstest fuer Chat ist derzeit nicht vorhanden.
+- bestehende Chat-Nachrichten behalten ihre bereits gespeicherten Citations, auch wenn das referenzierte Dokument spaeter archiviert oder geloescht wurde.
 
 ### Lifecycle-Felder im Dokumentvertrag
 
@@ -483,7 +499,14 @@ Verhaltensregeln:
 
 ### `PATCH /documents/{document_id}/archive`
 
-Archiviert ein aktives Dokument.
+Archiviert genau ein aktives Dokument.
+
+Vertrag:
+
+- erlaubt nur `active -> archived`
+- `archived -> archive` liefert `409 DOCUMENT_ALREADY_ARCHIVED`
+- `deleted -> archive` liefert `409 DOCUMENT_ALREADY_DELETED`
+- unbekannte Dokument-ID liefert `404 DOCUMENT_NOT_FOUND`
 
 Response `200`:
 
@@ -498,7 +521,14 @@ Response `200`:
 
 ### `PATCH /documents/{document_id}/restore`
 
-Stellt ein archiviertes Dokument wieder auf `active`.
+Stellt genau ein archiviertes Dokument wieder auf `active`.
+
+Vertrag:
+
+- erlaubt nur `archived -> active`
+- `active -> restore` liefert `409 INVALID_LIFECYCLE_TRANSITION`
+- `deleted -> restore` liefert `409 DOCUMENT_ALREADY_DELETED`
+- unbekannte Dokument-ID liefert `404 DOCUMENT_NOT_FOUND`
 
 Response `200`:
 
@@ -513,7 +543,14 @@ Response `200`:
 
 ### `DELETE /documents/{document_id}`
 
-Soft-deleted ein aktives oder archiviertes Dokument.
+Fuehrt immer ein Soft-Delete fuer ein `active` oder `archived` Dokument aus.
+
+Vertrag:
+
+- erlaubt `active -> deleted`
+- erlaubt `archived -> deleted`
+- `deleted -> delete` liefert `409 DOCUMENT_ALREADY_DELETED`
+- unbekannte Dokument-ID liefert `404 DOCUMENT_NOT_FOUND`
 
 Response `200`:
 
@@ -532,11 +569,22 @@ Soft-Delete-Regeln:
 - Read-API, Liste und Search blenden `deleted` konsequent aus
 - Versionen, Chunks und historische Citations bleiben physisch erhalten
 
+Search- und Reindex-Regeln:
+
+- Search bewertet nur Chunks aktiver Dokumente als sichtbar.
+- Lifecycle-Uebergaenge synchronisieren `Chunk.is_searchable` fuer vorhandene Chunks.
+- Reindex setzt aktive Dokumente wieder suchbar und archivierte oder geloeschte Dokumente wieder unsuchbar.
+- Der PostgreSQL-spezifische Reindex-Pfad ist im Service-Slice abgedeckt.
+- Ein echter PostgreSQL-Integrationslauf fuer Search und Reindex ist aktuell nicht erfolgreich abgeschlossen, weil die konfigurierte Test-Datenbank im letzten Lauf nicht erreichbar war.
+
 Fehlercodes mit Lifecycle-Bezug:
 
-| HTTP Status | Code | Aktueller Einsatz |
+| HTTP Status | Code | Einsatz |
 |---:|---|---|
-| `404` | `DOCUMENT_NOT_FOUND` | Dokument ist unbekannt oder bereits `deleted` |
+| `404` | `DOCUMENT_NOT_FOUND` | Dokument ist unbekannt |
+| `409` | `INVALID_LIFECYCLE_TRANSITION` | unzulaessiger Transition-Versuch wie `active -> restore` |
+| `409` | `DOCUMENT_ALREADY_ARCHIVED` | erneuter Archive-Versuch auf bereits archiviertem Dokument |
+| `409` | `DOCUMENT_ALREADY_DELETED` | Aktion auf bereits geloeschtem Dokument oder Restore-Versuch ohne Admin-Funktion |
 | `409` | `DOCUMENT_STATE_CONFLICT` | inkonsistenter Dokumentzustand im Read-Pfad |
 | `422` | `INVALID_LIFECYCLE_STATUS` | ungueltiger Querywert fuer `lifecycle_status` |
 
@@ -544,29 +592,28 @@ Bekannte Einschraenkungen:
 
 - Es gibt keinen API-Pfad, um soft-geloeschte Dokumente wieder sichtbar zu machen.
 - Der Querywert `lifecycle_status=deleted` ist syntaktisch gueltig, bleibt aber fachlich leer, weil geloeschte Dokumente generell ausgeblendet werden.
-
-### `DELETE /documents/{document_id}`
-
-Fuehrt ein Soft-Delete aus.
-
-Response `200`:
-
-```json
-{
-  "document_id": "document-id",
-  "lifecycle_status": "deleted",
-  "archived_at": null,
-  "deleted_at": "2026-05-05T12:00:00Z"
-}
-```
+- Historische Citations koennen auf Dokumente zeigen, die im aktuellen Read-, Search- oder Retrieval-Pfad nicht mehr sichtbar sind; das ist beabsichtigt.
+- Fuer neue Chat-Antworten ist Lifecycle nur indirekt ueber den Retrieval-Ausschluss nachgewiesen.
 
 ### Lifecycle-Fehler
 
 | Status | Code | Bedeutung |
 |---:|---|---|
-| `404` | `DOCUMENT_NOT_FOUND` | Dokument fehlt oder ist bereits soft deleted |
-| `409` | `DOCUMENT_STATE_CONFLICT` | ungueltige Transition |
+| `404` | `DOCUMENT_NOT_FOUND` | Dokument fehlt |
+| `409` | `INVALID_LIFECYCLE_TRANSITION` | ungueltige Transition fuer den aktuellen Status |
+| `409` | `DOCUMENT_ALREADY_ARCHIVED` | Dokument ist bereits archiviert |
+| `409` | `DOCUMENT_ALREADY_DELETED` | Dokument ist bereits geloescht oder Restore ist ohne Admin-Funktion unzulaessig |
+| `409` | `DOCUMENT_STATE_CONFLICT` | inkonsistenter Dokumentzustand ausserhalb des Lifecycle-Endpunkts |
 | `422` | `INVALID_LIFECYCLE_STATUS` | ungueltiger Listenfilter |
+
+Abdeckung durch Tests:
+
+- positiver Pfad fuer `archive`, `restore` und `delete`
+- `DOCUMENT_ALREADY_ARCHIVED` bei wiederholtem `archive`
+- `INVALID_LIFECYCLE_TRANSITION` bei `restore` auf `active`
+- `DOCUMENT_ALREADY_DELETED` bei `archive`, `restore` oder `delete` auf `deleted`
+- historische Citation-Snapshots und `source_status` fuer geloeschte Dokumente bleiben sichtbar
+- Search schliesst archivierte und geloeschte Dokumente im PostgreSQL-Integrationspfad fachlich aus, der aktuelle End-to-End-Lauf ist aber wegen DB-Erreichbarkeit fehlgeschlagen
 
 ## M3c Chat Contract
 
@@ -599,7 +646,17 @@ Response `201` `ChatSessionSummary`:
 
 Listet Sessions eines Workspaces.
 
-## M4d Admin Diagnostics Contract
+## M4d Admin Diagnostics Current State
+
+Der aktuell nachweisbare M4d-Slice besteht aus:
+
+- `POST /api/v1/admin/search-index/rebuild`
+- `GET /api/v1/admin/search-index/inconsistencies`
+- `GET /api/v1/jobs/{job_id}` fuer das Polling des Rebuild-Jobs
+
+Nicht nachweisbar implementiert ist derzeit ein aggregierter Endpoint `GET /api/v1/admin/diagnostics`.
+
+Die folgenden Diagnostics-Strukturen sind daher **Zielvertrag**, nicht aktueller Ist-Vertrag.
 
 ### `GET /api/v1/admin/diagnostics`
 
@@ -717,6 +774,11 @@ Fehler:
 ## M4e Backup and Restore Proposal
 
 M4e ist bewusst CLI-first. Restore wird nicht als normaler Endnutzer-HTTP-Flow definiert.
+
+Aktueller Status:
+
+- Die folgenden CLI-Befehle und Admin-Endpunkte sind derzeit Vorschlag und nicht als reale Implementierung im Repository nachgewiesen.
+- Es gibt aktuell keinen nachweisbaren produktiven Backup- oder Restore-Codepfad.
 
 Empfohlene CLI-Befehle:
 

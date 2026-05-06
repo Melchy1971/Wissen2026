@@ -7,7 +7,9 @@ from app.core.config import settings
 from app.core.database import DatabaseConfigurationError
 from app.core.errors import ApiError
 from app.db.session import get_session
+from app.schemas.admin import SearchIndexInconsistencyReportResponse
 from app.schemas.jobs import JobResponse
+from app.services.search_index_service import SearchIndexRebuildService
 from app.services.jobs.background_jobs import BackgroundJobService, process_search_index_rebuild_job
 
 
@@ -18,6 +20,14 @@ def get_background_job_service() -> Iterator[BackgroundJobService]:
     try:
         for session in get_session():
             yield BackgroundJobService.from_session(session)
+    except DatabaseConfigurationError as exc:
+        raise ApiError(message=str(exc)) from exc
+
+
+def get_search_index_service() -> Iterator[SearchIndexRebuildService]:
+    try:
+        for session in get_session():
+            yield SearchIndexRebuildService.from_session(session)
     except DatabaseConfigurationError as exc:
         raise ApiError(message=str(exc)) from exc
 
@@ -37,3 +47,13 @@ def rebuild_search_index(
     if session is not None:
         background_tasks.add_task(process_search_index_rebuild_job, job.id, session.get_bind())
     return service.to_response(job)
+
+
+@router.get("/search-index/inconsistencies", response_model=SearchIndexInconsistencyReportResponse)
+def get_search_index_inconsistencies(
+    auth_context: Annotated[RequestAuthContext, Depends(require_workspace_admin)],
+    service: Annotated[SearchIndexRebuildService, Depends(get_search_index_service)],
+) -> SearchIndexInconsistencyReportResponse:
+    return SearchIndexInconsistencyReportResponse.model_validate(
+        service.inspect_inconsistencies(workspace_id=auth_context.workspace_id)
+    )

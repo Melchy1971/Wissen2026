@@ -11,6 +11,16 @@ export function mapImportStatus(status) {
   return lookup[status] || { kind: 'unknown', label: 'Unbekannt', tone: 'neutral' };
 }
 
+export function mapLifecycleStatus(status) {
+  const lookup = {
+    active: { kind: 'active', label: 'active', tone: 'success' },
+    archived: { kind: 'archived', label: 'archived', tone: 'warning' },
+    deleted: { kind: 'deleted', label: 'deleted', tone: 'danger' },
+  };
+
+  return lookup[status] || lookup.active;
+}
+
 export function mapJobStatus(job) {
   const status = job?.status || 'unknown';
   const jobType = job?.job_type || 'background_job';
@@ -75,6 +85,9 @@ function mapErrorTitle(code) {
     DOCUMENT_NOT_FOUND: 'Dokument nicht gefunden',
     CHAT_SESSION_NOT_FOUND: 'Chat-Sitzung nicht gefunden',
     DOCUMENT_STATE_CONFLICT: 'Dokumentzustand inkonsistent',
+    INVALID_LIFECYCLE_TRANSITION: 'Ungueltiger Lifecycle-Wechsel',
+    DOCUMENT_ALREADY_ARCHIVED: 'Dokument bereits archiviert',
+    DOCUMENT_ALREADY_DELETED: 'Dokument bereits geloescht',
     WORKSPACE_REQUIRED: 'Workspace fehlt',
     WORKSPACE_ACCESS_FORBIDDEN: 'Workspace-Zugriff verweigert',
     INVALID_QUERY: 'Ungueltige Suche',
@@ -130,6 +143,7 @@ function formatRank(value) {
 
 export function mapDocumentListItem(item) {
   const importStatus = mapImportStatus(item.import_status);
+  const lifecycleStatus = mapLifecycleStatus(item.lifecycle_status);
   return {
     id: item.id,
     title: item.title || 'Unbenanntes Dokument',
@@ -138,6 +152,7 @@ export function mapDocumentListItem(item) {
     updatedAtLabel: formatDate(item.updated_at),
     latestVersionId: item.latest_version_id || null,
     importStatus,
+    lifecycleStatus,
     versionCount: item.version_count ?? 0,
     chunkCount: item.chunk_count ?? 0,
   };
@@ -181,6 +196,7 @@ export function mapSearchResult(item) {
 
 export function mapDocumentDetail(detail, versions, chunks) {
   const importStatus = mapImportStatus(detail.import_status);
+  const lifecycleStatus = mapLifecycleStatus(detail.lifecycle_status);
   return {
     id: detail.id,
     title: detail.title || 'Unbenanntes Dokument',
@@ -194,6 +210,9 @@ export function mapDocumentDetail(detail, versions, chunks) {
     parserVersion: detail.parser_metadata?.parser_version || 'Unbekannt',
     ocrUsed: detail.parser_metadata?.ocr_used ?? null,
     importStatus,
+    lifecycleStatus,
+    archivedAtLabel: detail.archived_at ? formatDate(detail.archived_at) : null,
+    deletedAtLabel: detail.deleted_at ? formatDate(detail.deleted_at) : null,
     chunkCount: detail.chunk_summary?.chunk_count ?? 0,
     totalChars: detail.chunk_summary?.total_chars ?? 0,
     latestVersionId: detail.latest_version_id || null,

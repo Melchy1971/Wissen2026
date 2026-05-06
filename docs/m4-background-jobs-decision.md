@@ -4,18 +4,30 @@ Stand: 2026-05-05
 
 ## Entscheidung
 
-Fuer M4 sollen **keine externen Worker wie Celery oder RQ** eingefuehrt werden. Ebenso soll der Import **nicht synchron bleiben**. Die empfohlene Entscheidung ist daher:
+Fuer M4 und den folgenden Zielzustand sollen **keine externen Worker wie Celery oder RQ** eingefuehrt werden. Ebenso soll der Import **nicht synchron bleiben**. Die finale Entscheidung ist daher:
 
 - **Option 3: einfache interne Queue einfuehren**
 - mit persistierten Job-Datensaetzen in der bestehenden PostgreSQL-Datenbank
-- mit einem kleinen In-Process-Worker pro Backend-Instanz fuer lokalen Betrieb
+- mit einem kleinen internen Worker pro Backend-Instanz fuer lokalen Betrieb
 - `FastAPI BackgroundTasks` nur als technische Bruecke fuer das initiale Triggern, aber **nicht** als eigentliches Zuverlaessigkeitsmodell
 
 Kurzform:
 
-- Import fuer GUI-Uploads: von synchron auf asynchronen Jobpfad umstellen
+- Import fuer GUI-Uploads: asynchroner Jobpfad auf Basis persistierter Queue
 - Search-Index-Rebuild: als expliziten Job modellieren statt als langen Admin-Request
-- Celery/RQ: spaeter moeglich, aber fuer M4 bewusst nicht im Scope
+- Celery/RQ: spaeter moeglich, aber bewusst nicht im Scope
+- synchroner Upload: verworfen
+
+### Klarer Zielzustand
+
+Der Zielzustand ist nicht "BackgroundTasks", sondern:
+
+- persistierte Queue ueber `background_jobs`
+- `202 Accepted` mit Job-ID als stabiler API-Vertrag
+- Polling ueber `GET /api/v1/jobs/{job_id}` fuer GUI und Admin-Oberflaechen
+- interner Worker mit exklusivem Claiming und spaeterer Restart-Wiederaufnahme
+
+Der aktuelle Stand darf `BackgroundTasks` zum Anschubsen eines In-Process-Workers verwenden. Diese Kopplung ist aber Uebergangstechnik und nicht die Architekturentscheidung.
 
 ## Begruendung
 
@@ -247,14 +259,51 @@ Erweitern um:
 
 Nicht Teil dieser Entscheidung bzw. bewusst spaeter:
 
+- synchroner Request mit vollstaendigem Importergebnis
+- `FastAPI BackgroundTasks` als einziges Ausfuehrungs- und Zuverlaessigkeitsmodell
 - Celery
 - RQ
 - Redis als Broker
 - verteilte Worker-Farm
 - priorisierte Multi-Queue-Strategien
 - WebSockets oder Server-Sent Events fuer Live-Fortschritt
+- Byte-genauer Upload-Fortschritt
 - OCR-Pipeline-Ausbau als eigener Worker-Stack
 - globale Batch-Orchestrierung fuer Massenimporte
+
+Explizit ebenfalls nicht umgesetzt:
+
+- Persistenz der Originaldatei als dauerhafte fachliche Quelle
+- Resume mitten im Parserlauf
+- eigenstaendige Jobhistorien- oder Ops-UI jenseits des aktuellen Polling-Modells
+
+## Migrationsplan vom Ist-Zustand zum Zielzustand
+
+### Phase A: Ist-Zustand absichern
+
+Bereits vorhanden:
+
+- persistierte Jobdatensaetze in `background_jobs`
+- `document_import` und `search_index_rebuild` als Jobtypen
+- API-Vertrag `202 Accepted + job_id`
+- Polling ueber `GET /api/v1/jobs/{job_id}`
+
+### Phase B: Worker-Semantik explizit machen
+
+- Begriffe in Code und Dokumentation auf "persistierte interne Queue" vereinheitlichen
+- `BackgroundTasks` nur noch als Startimpuls behandeln
+- Job-Observability an Claim, Start, Ende und Fehler koppeln
+
+### Phase C: Restart-Sicherheit vollenden
+
+- Stale `running` Jobs erkennen
+- Requeue- oder Recovery-Regeln fuer alte Locks definieren
+- Worker-Claiming ohne Request-Lebenszyklus stabilisieren
+
+### Phase D: Trigger entkoppeln
+
+- optionalen App-internen Queue-Loop oder separaten Worker-Entrypoint nutzen
+- `BackgroundTasks` spaeter entfernen oder rein optional machen
 
 ## Praktische Entscheidung in einem Satz
 

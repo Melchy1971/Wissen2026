@@ -32,10 +32,12 @@ class ChatMessageCreateRequest(StrictChatModel):
 
 
 class ChatCitationResponse(StrictChatModel):
-    chunk_id: str
+    chunk_id: str | None
     document_id: str
+    document_title: str
     source_anchor: DocumentChunkSourceAnchor
-    quote_preview: str | None = None
+    quote_preview: str
+    source_status: Literal["active", "archived", "deleted", "unknown"]
 
 
 class ChatConfidenceResponse(StrictChatModel):
