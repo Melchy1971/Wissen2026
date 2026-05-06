@@ -413,8 +413,9 @@ Erlaubte Typen:
 - Standardfehler, Auth-Bindung und einfache Erfolgsfaelle sind nachweisbar.
 - Der Upload ist auth-gebunden; Workspace und Benutzer kommen aus dem serverseitigen Auth-Kontext.
 - Default-Workspace-/Default-User-Fallbacks sind im Upload-Flow nicht aktiv.
-- Der PostgreSQL-Integrationstest fuer parallele Duplicate-Uploads ist nachweisbar gruen.
-- M4b ist nicht abgeschlossen, solange GUI/API-Drift, unvollstaendige Ergebnisdarstellung und verbleibende Upload-Annahmen ausserhalb des stabilisierten Kernvertrags nicht bereinigt sind.
+- Ein PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist im Repository vorhanden.
+- Dieser Test ist aktuell optional, benoetigt `TEST_DATABASE_URL` und kann bei fehlender Testdatenbank oder Migrationsproblemen `skipped` werden.
+- M4b ist nicht abgeschlossen, solange GUI/API-Drift, unvollstaendige Ergebnisdarstellung und der Status dieses Race-Tests nicht belastbar entschieden sind.
 
 ### Freigabekriterien
 
@@ -424,10 +425,14 @@ Erlaubte Typen:
 - GUI und Backend-Vertrag sind deckungsgleich
 - Fehlercodes sind sichtbar, korrekt gemappt und stabil
 - Dokumentation behauptet kein nicht implementiertes Upload-Verhalten
+- Der PostgreSQL-Race-Test ist entweder verpflichtend gruen oder bewusst als externer Infrastrukturblocker ausgelagert.
 
 ### Nachweisstand
 
-- `pytest tests/integration/test_documents_import.py` ist aktuell gruen und deckt parallele Duplicate-Uploads gegen PostgreSQL ab.
+- `tests/integration/test_documents_import.py` enthaelt den Race-Test `test_parallel_duplicate_imports_create_single_document`.
+- Der Test ist mit `@pytest.mark.postgres` markiert.
+- Er benoetigt `TEST_DATABASE_URL`.
+- Er kann aktuell bei fehlender Testdatenbank oder nicht aufloesbaren Migrationsvoraussetzungen `skipped` werden.
 
 ### Stop-Regeln fuer M4b
 
