@@ -77,6 +77,7 @@ $env:DATABASE_URL=$env:TEST_DATABASE_URL
 Bekannte Einschraenkung:
 
 - Der aktuelle Verifikationslauf gegen `85.215.131.200:5432` ist aus dieser Umgebung per Connection-Timeout fehlgeschlagen. Die Testumgebung ist damit fachlich vorbereitet, aber infrastrukturell erst nutzbar, wenn Netzwerkzugriff auf die Instanz besteht.
+- `alembic heads` zeigt aktuell zwei Heads (`20260505_0016`, `20260506_0013`); damit ist der Migrationsstand lokal lesbar, aber nicht als einzelner linearer Head belegbar.
 
 Frontend-Abhaengigkeiten installieren:
 

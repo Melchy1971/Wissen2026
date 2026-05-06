@@ -151,7 +151,14 @@ Filterverhalten:
 - Es werden nur Chunks aus dem angefragten `workspace_id` geliefert.
 - Es werden nur Chunks der aktuellen Dokumentversion geliefert.
 - Dokumente mit `import_status in ('parsed', 'chunked')` sind suchbar.
+- Es werden nur Dokumente mit `lifecycle_status = 'active'` beruecksichtigt.
+- Nur Chunks mit suchbarer Lifecycle-Sicht (`document_chunks.is_searchable = true`) sollen in neuen Search-Treffern auftauchen.
 - `pending`, `failed`, `duplicate` und andere Statuswerte werden nicht als Suchtreffer geliefert.
+
+Nachweisgrenze:
+
+- Diese Lifecycle-Filterung ist lokal im Service-, API- und Reindex-Slice belegt.
+- Der letzte echte PostgreSQL-Integrationslauf fuer Search/Reindex ist jedoch an `ConnectionTimeout` gegen die konfigurierte Ziel-Datenbank gescheitert.
 
 Sortierlogik:
 
@@ -252,6 +259,46 @@ Statusabfrage:
 
 - `GET /api/v1/jobs/{job_id}`
 
+## M4c Lifecycle Contract
+
+### Lifecycle State Machine
+
+Nachweisbar implementierte Transitionen:
+
+- `active -> archived`
+- `archived -> active`
+- `active -> deleted`
+- `archived -> deleted`
+
+Nicht implementiert:
+
+- `deleted -> active`
+- `deleted -> archived`
+- Hard Delete / Purge
+
+### Verhalten der Dokument-Endpunkte
+
+- `GET /documents` zeigt standardmaessig nur `active`.
+- `GET /documents?lifecycle_status=archived` liefert archivierte Dokumente explizit gefiltert.
+- `deleted` ist im regulaeren Listenpfad nicht sichtbar.
+- `GET /documents/{document_id}` liefert `active` und `archived`.
+- `GET /documents/{document_id}` behandelt `deleted` wie nicht vorhanden und liefert `404 DOCUMENT_NOT_FOUND`.
+- `PATCH /documents/{document_id}/archive` archiviert nur aktive Dokumente.
+- `PATCH /documents/{document_id}/restore` stellt nur archivierte Dokumente wieder her.
+- `DELETE /documents/{document_id}` fuehrt Soft Delete aus und laesst Versionen, Chunks und historische Citations bestehen.
+
+### Search-, Chat- und Citation-Verhalten
+
+- Neue Search-Treffer verwenden nur `active`e Dokumente.
+- Neues Chat-Retrieval folgt demselben Search-/Retrieval-Pfad und nutzt deshalb nur aktive Dokumente.
+- Historische Chat-Citations bleiben in der Chat-API sichtbar, auch wenn das referenzierte Dokument spaeter archiviert oder geloescht wurde.
+- Historische Citations tragen dafuer `source_status` wie `active`, `archived` oder `deleted`.
+
+Nachweisgrenze:
+
+- Historische Citation-Sichtbarkeit ist direkt ueber API-Tests belegt.
+- Fuer neue Chat-Antworten gibt es keinen eigenen Lifecycle-End-to-End-Test; dieses Verhalten ist derzeit nur indirekt ueber Retrieval/Search nachgewiesen.
+
 Fehlgeschlagener Job `200`:
 
 ```json
@@ -336,6 +383,11 @@ Duplicate-Vertrag im aktuellen Stand:
 - `result.duplicate_of_document_id = <bestehende dokument-id>`
 - `result.document_id` zeigt weiterhin auf das vorhandene Zieldokument
 - der Job selbst bleibt `completed`, weil Duplicate als fachlich erfolgreicher Abschluss gilt
+
+Nachweisgrenze:
+
+- Dieser Vertrag ist im Backend und in sequentiellen Upload-Tests belegt.
+- Der vorhandene PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist aktuell nicht gruen verifiziert, weil der letzte echte PostgreSQL-Lauf infra-blockiert war.
 
 OCR-required-Vertrag im aktuellen Stand:
 

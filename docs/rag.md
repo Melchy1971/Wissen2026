@@ -61,6 +61,7 @@ Nachweisgrenze:
 
 - Historische Citation-Stabilitaet ist direkt getestet.
 - Dass neue Chat-Antworten keine archivierten oder geloeschten Dokumente mehr verwenden, ist derzeit nur indirekt ueber den Retrieval-/Search-Ausschluss nachgewiesen.
+- Ein gruener PostgreSQL-End-to-End-Nachweis fuer diesen Ausschluss liegt im letzten Lauf nicht vor, weil die konfigurierte Testdatenbank nicht erreichbar war.
 
 ## Fehlerverhalten
 

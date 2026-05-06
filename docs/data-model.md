@@ -92,6 +92,7 @@ Soft-Delete-Modell:
 - `deleted` entfernt kein Dokument physisch aus `documents`.
 - Versionen und Chunks bleiben erhalten.
 - Der Lifecycle wird ueber Status und Timestamps modelliert, nicht ueber `DELETE CASCADE`.
+- Eine Wiederherstellung geloeschter Dokumente ist im aktuellen API-Vertrag nicht implementiert.
 
 Erlaubte Importstatuswerte:
 
@@ -217,9 +218,11 @@ Chat-spezifische Regeln:
 - `chat_sessions` enthaelt `workspace_id`, `owner_user_id`, `title`, `created_at`, `updated_at`.
 - `chat_messages` enthaelt `session_id`, `message_index`, `role`, `content`, `basis_type`, `metadata`, `created_at`.
 - `chat_citations` enthaelt `message_id`, `chunk_id`, `document_id`, `source_anchor`.
+- `chat_citations` enthaelt zusaetzliche Snapshot-Felder wie `document_title`, `quote_preview` und `source_status`.
 - Citations referenzieren `documents` und `document_chunks` referenziell konsistent.
 - Fuer zitierte Dokumente und Chunks ist Loeschen bewusst restriktiv modelliert, damit historische Chat-Quellen nicht still brechen.
 - Historische Citations bleiben auch dann lesbar, wenn das referenzierte Dokument spaeter `deleted` ist.
+- Lifecycle-Aenderungen aktualisieren den Citation-Snapshot `source_status`, entfernen aber keine historische Citation.
 - `POST /api/v1/chat/sessions/{session_id}/messages` speichert zuerst die User-Message und danach bei ausreichendem Kontext die Assistant-Message.
 - Assistant-Messages mit `basis_type = knowledge_base` muessen im erfolgreichen RAG-Pfad Citations mit `chunk_id` besitzen.
 - Insufficient-Context-, Retrieval- und LLM-Fehler speichern keine freie Assistant-Antwort.
@@ -258,6 +261,7 @@ Relevante Migrationen fuer das Dokumentmodell:
 Bekannte Einschraenkungen:
 
 - Das Datenmodell enthaelt keinen separaten Purge-Status oder Hard-Delete-Prozess.
+- Das Datenmodell belegt historische Citation-Stabilitaet, aber nicht allein den End-to-End-Nachweis, dass neue Chat-Antworten nach Lifecycle-Aenderungen keine alten Dokumente mehr verwenden.
 - `deleted` ist terminal; eine Rueckkehr in `active` oder `archived` ist nicht modelliert.
 - Historische Citations werden absichtlich nicht an den aktuellen Read- oder Search-Sichtbarkeitsstatus angepasst, sondern nur ueber `source_status` markiert.
 

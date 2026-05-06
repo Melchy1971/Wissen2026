@@ -120,6 +120,18 @@ Lifecycle-Auswirkung:
 - Reindex synchronisiert dazu die Chunk-Sichtbarkeit ueber `document_chunks.is_searchable`.
 - Historische Chat-Citations sind kein Retrieval-Modus und werden von diesen Regeln nicht rueckwirkend bereinigt.
 
+Reindex-Regeln im nachgewiesenen Stand:
+
+- Archivieren und Loeschen setzen Chunks fuer das betroffene Dokument auf `is_searchable = false`.
+- Restore setzt Chunks fuer das betroffene Dokument wieder auf `is_searchable = true`.
+- Der Rebuild-Service synchronisiert die Searchability erneut gegen den dokumentierten Lifecycle-Zustand.
+- Inkonsistenzpruefungen melden archivierte oder geloeschte Dokumente, die weiter im aktiven Index auftauchen, sowie fehlende Indexeintraege.
+
+Nachweisgrenze:
+
+- Der Lifecycle-Ausschluss ist in lokalen Service-/API-Tests und in den PostgreSQL-Integrationsfixtures modelliert.
+- Der letzte echte PostgreSQL-Lauf gegen die konfigurierte Testdatenbank war infra-blockiert und konnte diesen Nachweis nicht gruen bestaetigen.
+
 ## Sortierlogik
 
 Die Trefferreihenfolge ist stabil und Teil des Vertrags:
@@ -177,7 +189,7 @@ Fehlerformat:
 
 ## Tests
 
-M3b Search ist ueber PostgreSQL-Integrationstests abgesichert, die nur mit `TEST_DATABASE_URL` laufen:
+M3b Search ist ueber PostgreSQL-Integrationstests vorbereitet, die nur mit `TEST_DATABASE_URL` laufen:
 
 - echte HTTP-Requests gegen `GET /api/v1/search/chunks`
 - deterministische Fixture-Daten
@@ -191,5 +203,6 @@ Aktueller Befund:
 
 - Der fokussierte SQLite-/Service-Slice ist gruen.
 - Der letzte End-to-End-Lauf gegen die konfigurierte PostgreSQL-Ziel-Datenbank ist nicht an fachlichem Verhalten, sondern an DB-Erreichbarkeit gescheitert.
+- Der lokale Reindex-/Inkonsistenz-Slice ist gruen, ersetzt aber nicht den blockierten PostgreSQL-End-to-End-Nachweis.
 
 Ohne `TEST_DATABASE_URL` werden diese Tests geskippt. SQLite darf diese Tests nicht ausfuehren.

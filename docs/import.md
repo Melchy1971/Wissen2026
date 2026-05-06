@@ -1,6 +1,6 @@
 # Import
 
-Stand: 2026-05-05
+Stand: 2026-05-06
 
 ## M4b Upload-Flow
 
@@ -112,7 +112,12 @@ Status:
 
 - Die Pflicht-Uploadtests laufen ohne Skip im API-Testlauf.
 - Der echte PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist als einziger optionaler Test isoliert.
-- Aktueller Status des PostgreSQL-Race-Tests: `skipped`, weil die PostgreSQL-Migrationsvoraussetzungen derzeit nicht vollstaendig verfuegbar sind.
+- Aktueller Status des PostgreSQL-Race-Tests: im letzten echten Lauf nicht gruen verifiziert; der Test endete nicht mit fachlichem Ergebnis, sondern an PostgreSQL-Erreichbarkeit und Migrationsvoraussetzungen.
+
+Nachweisgrenze:
+
+- Duplicate-Verhalten ist im Backend und im sequentiellen API-Pfad gut belegt.
+- Ein gruener echter PostgreSQL-Nachweis fuer paralleles Duplicate-Handling liegt aktuell nicht vor.
 
 ## Abschlussentscheidung fuer M4b
 

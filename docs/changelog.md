@@ -1,6 +1,26 @@
 # Changelog
 
-Stand: 2026-05-05
+Stand: 2026-05-06
+
+## 2026-05-06 - Status- und Masterplan-Sync auf echten PostgreSQL-Stand
+
+### Changed
+
+- `docs/status.md`, `docs/changelog.md` und `masterplan.md` auf denselben Nachweisstand synchronisiert.
+- Historische gruene PostgreSQL-Nachweise und der aktuellste echte PostgreSQL-Verifikationsversuch werden jetzt sprachlich sauber getrennt.
+- M4c-Score in der M4-Statusmatrix auf den bereits im Detailteil dokumentierten Stand `88/100` angehoben.
+- M4b wird im Masterplan jetzt explizit als auf echter PostgreSQL-Basis nicht freigegeben gekennzeichnet.
+
+### Findings
+
+- Ein frueherer PostgreSQL-Integrationslauf war gruen, der aktuellste echte Lauf aus dieser Umgebung jedoch nicht.
+- Der aktuelle PostgreSQL-Verifikationspfad ist infra-blockiert durch `ConnectionTimeout` gegen die konfigurierte Ziel-Datenbank.
+- Der PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist vorhanden, aber im letzten echten Lauf nicht gruen verifiziert.
+- M4b bleibt damit auf Basis echter PostgreSQL-Verifikation `nicht abgeschlossen`.
+
+### Decision
+
+- `docs/status.md`, `docs/changelog.md` und `masterplan.md` beschreiben jetzt denselben realen PostgreSQL- und M4-Gate-Stand.
 
 ## 2026-05-06 - M4 Gesamtstatus neu bewertet
 
@@ -13,7 +33,7 @@ Stand: 2026-05-05
 
 ### Findings
 
-- `M4a = 82/100`, `M4b = 88/100`, `M4c = 86/100`, `M4d = 58/100`, `M4e = 18/100`.
+- `M4a = 82/100`, `M4b = 88/100`, `M4c = 88/100`, `M4d = 58/100`, `M4e = 18/100`.
 - M4 ist damit `teilweise stabil`.
 - M5 bleibt blockiert, weil `M4a < 95`, `M4b < 90` und `M4c < 90`.
 - Der letzte PostgreSQL-Integrationslauf fuer Search/Reindex ist weiterhin an Connection-Timeouts gegen die konfigurierte Ziel-Datenbank gescheitert.
@@ -40,7 +60,7 @@ Stand: 2026-05-05
 - `POST /documents/import` ist auth-gebunden und liefert ohne Auth `AUTH_REQUIRED` und im fremden Workspace `WORKSPACE_ACCESS_FORBIDDEN`.
 - Der Uploadvertrag bleibt asynchron: `202 Accepted` plus Job-Polling.
 - Duplicate-Sequential-Tests sind Pflicht; der echte PostgreSQL-Race-Test ist als einziger optionaler Test isoliert.
-- Der PostgreSQL-Race-Test ist aktuell `skipped`, weil die zugrunde liegende Migrationskette nicht vollstaendig aufloesbar ist.
+- Der PostgreSQL-Race-Test ist im letzten echten Lauf nicht gruen verifiziert, weil die zugrunde liegende PostgreSQL-Ziel-Datenbank und Migrationsvoraussetzungen nicht erfolgreich erreichbar waren.
 
 ### Decision
 
@@ -61,6 +81,8 @@ Stand: 2026-05-05
 - `DELETE /documents/{document_id}` ist als Soft-Delete implementiert.
 - Historische Chat-Citations bleiben fuer archivierte und geloeschte Dokumente sichtbar.
 - Die GUI fuer Lifecycle-Filter, Archive, Restore und Soft-Delete ist ueber Frontend-Screen-Tests nachgewiesen.
+- Der fokussierte Backend-Lauf fuer Lifecycle, historische Citations und Search-Index-Service lief lokal gruen.
+- Der fokussierte Frontend-Lauf fuer Dokumente, Chat und Admin-Diagnostik war nicht vollstaendig gruen; ein Admin-Diagnostics-Test lief statt des erwarteten Queue-Status in `NETWORK_ERROR`.
 - Der letzte PostgreSQL-Integrationslauf fuer Search und Reindex ist an Connection-Timeouts gegen die konfigurierte Ziel-Datenbank gescheitert.
 - Fuer neue Chat-Antworten gibt es keinen eigenen Lifecycle-Integrationstest; der Nachweis ist indirekt ueber Retrieval gegeben.
 

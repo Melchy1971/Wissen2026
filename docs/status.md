@@ -1,6 +1,6 @@
 # Projektstatus
 
-Stand: 2026-05-05
+Stand: 2026-05-06
 
 ## Paket-5-Abschlussstand
 
@@ -157,7 +157,7 @@ Begruendung:
 
 ## M4 Produktisierung und Betriebsfaehigkeit
 
-Stand des Abgleichs mit Code und Dokumentation am 2026-05-05:
+Stand des Abgleichs mit Code und Dokumentation am 2026-05-06:
 
 - M4 ist teilweise implementiert.
 - Die dafuer benoetigte M3c-Foundation ist abgeschlossen.
@@ -168,7 +168,7 @@ M4 Statusmatrix am 2026-05-06:
 |---|---:|---|
 | M4a Auth & Workspace Isolation | `82/100` | nicht abgeschlossen |
 | M4b Upload/API Stabilitaet | `88/100` | nicht abgeschlossen |
-| M4c Lifecycle | `86/100` | nicht abgeschlossen |
+| M4c Lifecycle | `88/100` | nicht abgeschlossen |
 | M4d Diagnostics | `58/100` | nur teilweise real implementiert |
 | M4e Backup/Restore | `18/100` | Konzept, nicht implementiert |
 
@@ -320,12 +320,13 @@ Abschlussbewertung fuer M4b:
 
 ### M4c Dokument-Lifecycle
 
-Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
+Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-06:
 
 - Der Dokument-Lifecycle ist im Backend durchgaengig mit `active`, `archived` und `deleted` implementiert.
 - Listen- und Read-Pfade verarbeiten diese Stati konsistent.
 - Soft-Delete wird ueber `lifecycle_status = deleted` plus `deleted_at` modelliert; physische Folgeobjekte bleiben erhalten.
 - Historische Chat-Citations bleiben fuer spaeter archivierte oder geloeschte Dokumente sichtbar.
+- Der fokussierte Backend-Lauf fuer Lifecycle, historische Citations und Search-Index-Service ist lokal gruen nachgewiesen.
 
 Lifecycle-Regeln im aktuellen Stand:
 
@@ -349,6 +350,7 @@ Auswirkungen auf Liste, Suche und Chat:
 - Search schliesst alles ausser `active` aus
 - fuer neue RAG-Antworten gibt es nur einen indirekten Nachweis ueber den Search-/Retrieval-Pfad, keinen eigenen Lifecycle-spezifischen Chat-Integrationstest
 - bestehende Chat-Citations bleiben bei archivierten und geloeschten Dokumenten historisch lesbar
+- historische Chat-Citations aktualisieren dabei ihren `source_status` auf `archived` oder `deleted`
 
 Reindex-Regeln:
 
@@ -372,14 +374,15 @@ Bekannte Einschraenkungen:
 - die GUI ist fuer Listenfilter, Archive, Restore und Soft-Delete ueber Vitest-Screen-Tests verifiziert
 - Search-/Reindex-Integrationsnachweise gegen PostgreSQL sind aktuell wegen nicht erreichbarer Test-Datenbank unvollstaendig
 - fuer neue Chat-Antworten gibt es keinen eigenen expliziten Lifecycle-Integrationstest jenseits des Retrieval-Ausschlusses
+- der letzte fokussierte Frontend-Lauf war fuer angrenzende Lifecycle-/Rebuild-Screens nicht vollstaendig gruen, weil ein separater Admin-Diagnostics-Test in `NETWORK_ERROR` lief
 
 Abschlussbewertung fuer M4c:
 
-- Score: `86/100`
+- Score: `88/100`
 - Dokumentation: jetzt aktualisiert
 - Konsistenz mit dem implementierten Code: **teilweise, aber nicht vollstaendig hart abgesichert**
-- Teststatus: Backend-Lifecycle und GUI-Slice sind gruen belegbar; der PostgreSQL-End-to-End-Pfad fuer Search/Reindex ist aktuell nicht erfolgreich verifiziert
-- Blocker: fehlender gruener PostgreSQL-Integrationslauf, kein eigener Lifecycle-Chat-End-to-End-Nachweis und keine Admin-Sicht fuer `deleted`
+- Teststatus: Backend-Lifecycle, Soft-Delete, historische Citations und GUI-Slice sind lokal gruen belegbar; der PostgreSQL-End-to-End-Pfad fuer Search/Reindex ist aktuell nicht erfolgreich verifiziert
+- Blocker: fehlender gruener PostgreSQL-Integrationslauf, kein eigener Lifecycle-Chat-End-to-End-Nachweis und kein vollstaendig gruener fokussierter Frontend-Lauf ueber angrenzende Lifecycle-/Rebuild-Screens
 - Entscheidung: `nicht abgeschlossen`
 
 ### M4d Diagnostics
@@ -641,8 +644,9 @@ Relevante Migrationen:
 ## Partial
 
 - PostgreSQL-Integrationstests sind vorhanden, laufen aber nur mit gesetzter `TEST_DATABASE_URL`.
-- Der aktuelle verifizierte Standardlauf ist `42 passed, 1 skipped`; der Skip betrifft den optionalen PostgreSQL-Pfad ohne gesetzte Test-DB im Standardlauf.
-- Der echte PostgreSQL-Integrationslauf mit gesetzter Test-DB ist gruen: `6 passed`.
+- Der letzte verifizierte Standardlauf ist `42 passed, 1 skipped`; der Skip betrifft den optionalen PostgreSQL-Pfad ohne gesetzte Test-DB im Standardlauf.
+- Ein frueherer PostgreSQL-Integrationslauf mit gesetzter Test-DB war gruen: `6 passed`.
+- Der aktuellste echte PostgreSQL-Verifikationsversuch aus dieser Umgebung ist jedoch nicht gruen, sondern infra-blockiert (`ConnectionTimeout` gegen die konfigurierte Ziel-Datenbank).
 - PDF-Import erkennt OCR-Bedarf, besitzt aber keine OCR-Ausfuehrung.
 - DOC-Import funktioniert nur, wenn LibreOffice lokal verfuegbar ist.
 - Quellenanker sind API-seitig normalisiert, aber Parser liefern noch nicht fuer alle Formate vollstaendige `page`, `paragraph`, `char_start` und `char_end`-Werte.
@@ -702,7 +706,7 @@ Finale Entscheidung: `abgeschlossen`.
 Begruendung:
 
 - Die Dokumentation ist aktuell.
-- Der PostgreSQL-End-to-End-Nachweis ist erfolgt.
+- Ein frueherer PostgreSQL-End-to-End-Nachweis ist erfolgt; der aktuellste echte Lauf aus dieser Umgebung ist jedoch nicht gruen verifiziert.
 - Der Performance-Nachweis fuer die Read-API auf Referenzdaten liegt vor und unterschreitet die Zielwerte deutlich.
 
 Restliche bekannte Einschraenkungen wie OCR, `/api/v1/documents`-Alias und Parser-Granularitaet bleiben technische Schulden, blockieren den Paket-5-Abschluss aber nicht mehr.

@@ -1,6 +1,6 @@
 # Wissensbasis V1 - Masterplan
 
-**Stand:** 2026-05-05  
+**Stand:** 2026-05-06  
 **Ground Truth:** Code und Migrationen sind verbindlich. Dokumentation beschreibt den Stand, entscheidet ihn aber nicht.  
 **Ziel:** Eine robuste Wissensbasis, in der Dokumente importiert, normalisiert, versioniert, als Chunks lesbar gemacht, spaeter durchsucht und im Chat/Analysekontext verwendet werden koennen.
 
@@ -14,7 +14,7 @@ Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retri
 |---|---|---|
 | Backend | FastAPI | ✅ implementiert |
 | Frontend | React/Vite | ✅ M3a-Grundlage und M3c-Chat-UI sind implementiert |
-| Datenbank | PostgreSQL als Ziel-DB | Schema und Alembic-Migrationen vorhanden |
+| Datenbank | PostgreSQL als Ziel-DB | ✅ Schema und Alembic-Migrationen vorhanden; echter Ziel-DB-Lauf aktuell infra-blockiert |
 | Test-DB | SQLite fuer lokale API-/Unit-Tests, optional PostgreSQL via `TEST_DATABASE_URL` | ✅ implementiert |
 | Migrationen | Alembic | ✅ implementiert |
 | Auth V1 | M4a fuehrt Auth und Workspace-Isolation als Produktthema ein | Zielbild definiert, im Code nicht konsistent abgeschlossen |
@@ -26,10 +26,11 @@ Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retri
 | Quellenanker | normalisiertes `source_anchor` fuer API | ✅ implementiert |
 | Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | ✅ implementiert |
 | Upload-Ausfuehrung | persistierte interne Queue mit `202 + job_id + polling`; `BackgroundTasks` nur Bruecke | teilweise implementiert |
+| Dokument-Lifecycle | `active`, `archived`, `deleted` mit Soft Delete und historischer Citation-Stabilitaet | teilweise implementiert |
 | Fehlerstandard | einheitliches API-Error-Envelope | ✅ implementiert fuer Paket-5-Pfade |
 | OCR | explizit nicht Teil von Paket 5 | fehlt |
 | GUI-Start | M3a erst nach erfolgreichem Paket-5-Gate mit Score >= 90 | ✅ gestartet und als read-only GUI-Basis umgesetzt |
-| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | M3b implementiert und ueber PostgreSQL-Tests abgesichert |
+| Suche/Retrieval | M3, nur auf stabile Read-API und GUI-Foundation aufsetzen | ✅ M3b fachlich implementiert; letzter echter PostgreSQL-Lauf aktuell infra-blockiert |
 | Chat | nach M3 | ✅ M3c Chat/RAG Foundation abgeschlossen |
 | Analyse | nach Chat/Retrieval-Grundlage | vorbereitet im Datenmodell, Fachlogik fehlt |
 | Vektorsuche | optional, nicht V1-kritisch | fehlt |
@@ -69,10 +70,19 @@ Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retri
   - ✅ Datenmodell-Dokumentation
   - ✅ ADR
   - ✅ Definition of Done
+- ✅ Auth-Kern mit Login/Me-Endpunkten sowie serverseitigem Workspace-Kontext ist implementiert.
+- ✅ Jobbasierter Upload-Vertrag `POST /documents/import -> 202 -> Job-Polling` ist implementiert.
+- ✅ Dokument-Lifecycle mit `active`, `archived`, `deleted` und Soft Delete ist implementiert.
+- ✅ Historische Chat-Citations mit `source_status` sind implementiert.
+- ✅ Search-Index-Rebuild und Inkonsistenzpruefung sind implementiert.
 
 ### Partial
 
-- PostgreSQL-Integrationstests existieren, laufen aber nur mit `TEST_DATABASE_URL`.
+- PostgreSQL-Integrationstests existieren, laufen aber nur mit `TEST_DATABASE_URL` und sind im letzten echten Lauf nicht gruen gewesen.
+- Echter PostgreSQL-Zugriff gegen `85.215.131.200:5432` ist aus der aktuellen Umgebung blockiert; dadurch sind Duplicate-, Search- und Reindex-Nachweise aktuell nicht gruen verifiziert.
+- M4a Auth und Workspace-Isolation sind nur teilweise abgeschlossen.
+- M4b Upload/API-Stabilitaet ist nur teilweise abgeschlossen.
+- M4c Lifecycle ist fachlich implementiert, aber fuer den Abschluss nicht vollstaendig hart nachgewiesen.
 - PDF-Parser erkennt OCR-Bedarf, fuehrt aber kein OCR aus.
 - DOC-Parser haengt von lokal verfuegbarem LibreOffice ab.
 - Quellenanker sind API-seitig normalisiert, aber Parser liefern nicht fuer alle Formate vollstaendige Positionsdaten.
@@ -88,6 +98,8 @@ Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retri
 - Analyse-/Merge-/Refine-Fachlogik.
 - Backup-/Restore-Automatisierung.
 - verpflichtende PostgreSQL-CI-Integrationstests.
+- direkter Lifecycle-End-to-End-Nachweis fuer neue Chat-Antworten.
+- gruener echter PostgreSQL-Pflichtlauf fuer M4b.
 
 ---
 
@@ -415,8 +427,8 @@ Erlaubte Typen:
 - Der Upload ist auth-gebunden; Workspace und Benutzer kommen aus dem serverseitigen Auth-Kontext.
 - Default-Workspace-/Default-User-Fallbacks sind im Upload-Flow nicht aktiv.
 - Ein PostgreSQL-Race-Test fuer parallele Duplicate-Uploads ist im Repository vorhanden.
-- Dieser Test ist aktuell optional, benoetigt `TEST_DATABASE_URL` und kann bei fehlender Testdatenbank oder Migrationsproblemen `skipped` werden.
-- M4b ist nicht abgeschlossen, solange GUI/API-Drift, unvollstaendige Ergebnisdarstellung und der Status dieses Race-Tests nicht belastbar entschieden sind.
+- Dieser Test ist aktuell nicht gruen verifiziert; der letzte echte PostgreSQL-Lauf endete nicht mit fachlichem Ergebnis, sondern an DB-Erreichbarkeit und Migrationsvoraussetzungen.
+- Nach aktuellem Gate-Stand ist M4b mit realer PostgreSQL-Bewertung **nicht freigegeben**.
 
 ### Freigabekriterien
 
@@ -433,7 +445,8 @@ Erlaubte Typen:
 - `tests/integration/test_documents_import.py` enthaelt den Race-Test `test_parallel_duplicate_imports_create_single_document`.
 - Der Test ist mit `@pytest.mark.postgres` markiert.
 - Er benoetigt `TEST_DATABASE_URL`.
-- Er kann aktuell bei fehlender Testdatenbank oder nicht aufloesbaren Migrationsvoraussetzungen `skipped` werden.
+- Im letzten echten Lauf wurde er wegen nicht verfuegbarer PostgreSQL-Migrationsvoraussetzungen `skipped`.
+- Damit liegt aktuell **kein gruener echter PostgreSQL-Nachweis** fuer paralleles Duplicate-Handling vor.
 
 ### Stop-Regeln fuer M4b
 
@@ -882,7 +895,7 @@ Aktueller M4-Gate-Stand am 2026-05-06:
 |---|---:|---|---|
 | M4a | `82/100` | nicht abgeschlossen | blockiert M5 |
 | M4b | `88/100` | nicht abgeschlossen | blockiert M5 |
-| M4c | `86/100` | nicht abgeschlossen | blockiert M5 |
+| M4c | `88/100` | nicht abgeschlossen | blockiert M5 |
 | M4d | `58/100` | nur teilweise real implementiert | `No-Go` |
 | M4e | `18/100` | Konzept, nicht implementiert | `No-Go` |
 

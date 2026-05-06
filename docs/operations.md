@@ -23,13 +23,16 @@ Verbindungsstatus am 2026-05-06:
 
 - Die URL ist fachlich korrekt zusammengesetzt.
 - Der Verbindungsaufbau gegen `85.215.131.200:5432` ist aus der aktuellen Umgebung per `psycopg.errors.ConnectionTimeout` fehlgeschlagen.
-- Alembic und `pytest -m postgres` koennen deshalb aktuell nicht erfolgreich laufen.
+- `alembic current` kann gegen diese Datenbank deshalb aktuell nicht erfolgreich laufen.
+- `pytest -m postgres` scheitert vor dem eigentlichen Fachtest am selben Verbindungsproblem.
+- `alembic heads` ist lokal lesbar, zeigt aber aktuell zwei Heads: `20260505_0016` und `20260506_0013`.
 
 Bekannte Einschraenkungen:
 
 - Die Testdatenbank muss dediziert sein, weil die Tests `alembic downgrade base` und `upgrade head` ausfuehren.
 - Ohne Netzwerkzugriff auf den Host schlagen die Tests vor dem eigentlichen Fachsetup fehl.
 - `DATABASE_URL` sollte fuer Alembic und `TEST_DATABASE_URL` fuer PostgreSQL-Tests auf dieselbe dedizierte Instanz zeigen, wenn der Testpfad lokal verifiziert wird.
+- Solange die Migrationskette zwei Heads hat, ist `alembic head aktuell` nicht als linearer Einzelzustand belegbar.
 
 ## M4c Dokument-Lifecycle im Betrieb
 
@@ -60,6 +63,7 @@ Betriebsgrenze:
 
 - Der Service-Slice fuer Reindex ist getestet.
 - Der letzte echte PostgreSQL-Integrationslauf fuer Search und Reindex ist fehlgeschlagen, weil die konfigurierte Test-Datenbank per Connection-Timeout nicht erreichbar war.
+- Der letzte fokussierte Frontend-Lauf fuer die angrenzende Admin-Rebuild-UI war nicht vollstaendig gruen, weil ein Test statt des erwarteten Queue-Status einen `NETWORK_ERROR` sah.
 
 ## Chat- und Citation-Verhalten
 
@@ -84,3 +88,4 @@ Betriebsgrenze:
 - kein Purge-/Hard-Delete-Prozess
 - kein gesonderter historischer Retrieval-Modus fuer archivierte oder geloeschte Dokumente
 - keine gruen verifizierte PostgreSQL-End-to-End-Abdeckung fuer Search/Reindex im letzten Lauf
+- kein direkter Lifecycle-End-to-End-Test fuer neue Chat-Antworten

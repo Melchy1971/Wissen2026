@@ -192,6 +192,7 @@ Bekannte Einschraenkungen:
 - Die Ziel-Datenbank muss vom lokalen Rechner oder der CI-Umgebung auf `85.215.131.200:5432` erreichbar sein.
 - Im aktuellen Verifikationslauf aus dieser Umgebung ist die Verbindung per `psycopg.errors.ConnectionTimeout` fehlgeschlagen.
 - Solange die Instanz nicht erreichbar ist, schlagen Alembic und alle `@pytest.mark.postgres`-Tests vor dem eigentlichen Fachtest fehl.
+- `alembic heads` zeigt aktuell zwei Heads: `20260505_0016` und `20260506_0013`; damit ist der Alembic-Head-Zustand derzeit nicht linear.
 - Die URL enthaelt produktionsnahe Zugangsdaten und darf deshalb nicht in `.env`, `pyproject.toml` oder Git-committete Konfigurationsdateien geschrieben werden.
 
 ### Race-Test fuer doppelte Uploads

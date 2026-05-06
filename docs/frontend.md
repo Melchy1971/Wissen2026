@@ -94,6 +94,7 @@ Bekannte Einschraenkungen im Lifecycle-Slice:
 
 - Die GUI dokumentiert, dass archivierte Dokumente nicht in Suche oder Chat erscheinen, stützt sich dafuer aber auf Backend-Verhalten statt auf eigenen Browser-E2E-Nachweis.
 - Der Lifecycle-Slice ist ueber Screen-Tests verifiziert, nicht ueber Browser-E2E gegen ein laufendes Gesamtsystem.
+- Der letzte fokussierte Frontend-Lauf fuer angrenzende Lifecycle-/Rebuild-Screens war nicht vollstaendig gruen, weil ein separater Admin-Diagnostics-Test in einen `NETWORK_ERROR` lief.
 
 ## Bewusst nicht umgesetzt
 
@@ -163,4 +164,4 @@ Nicht nachweisbar implementiert:
 
 ## Fazit
 
-Der Frontend-Schnitt deckt Dokumente, Suche, Chat sowie erste M4-Produktisierungs-Slices fuer Upload, Lifecycle und Admin-Rebuild ab. Der Lifecycle-Flow fuer Dokumentliste und Dokumentdetail ist ueber Screen-Tests nachgewiesen. M4b bleibt dennoch nicht abgeschlossen, weil `warnings`, Direktnavigation ins Dokumentdetail und die Bereinigung alter Workspace-Query-Modelle noch offen sind.
+Der Frontend-Schnitt deckt Dokumente, Suche, Chat sowie erste M4-Produktisierungs-Slices fuer Upload, Lifecycle und Admin-Rebuild ab. Der Lifecycle-Flow fuer Dokumentliste und Dokumentdetail ist ueber Screen-Tests nachgewiesen. Fuer M4c darf daraus aber nur gefolgert werden, dass die Dokument-GUI lokal konsistent wirkt; ein vollstaendig gruener angrenzender Frontend-Gesamtnachweis lag im letzten fokussierten Lauf nicht vor.
