@@ -2,6 +2,35 @@
 
 Stand: 2026-05-06
 
+## PostgreSQL-Integrationstests
+
+Aktuell verwendete Test-URL:
+
+- `TEST_DATABASE_URL=postgresql+psycopg://appuser:<password>@85.215.131.200:5432/wissen2026`
+
+Lokale Aktivierung:
+
+```powershell
+cd backend
+$env:TEST_DATABASE_URL="postgresql+psycopg://appuser:<password>@85.215.131.200:5432/wissen2026"
+$env:DATABASE_URL=$env:TEST_DATABASE_URL
+.\.venv\Scripts\python.exe -m alembic heads
+.\.venv\Scripts\python.exe -m alembic current
+.\.venv\Scripts\python.exe -m pytest -m postgres -q
+```
+
+Verbindungsstatus am 2026-05-06:
+
+- Die URL ist fachlich korrekt zusammengesetzt.
+- Der Verbindungsaufbau gegen `85.215.131.200:5432` ist aus der aktuellen Umgebung per `psycopg.errors.ConnectionTimeout` fehlgeschlagen.
+- Alembic und `pytest -m postgres` koennen deshalb aktuell nicht erfolgreich laufen.
+
+Bekannte Einschraenkungen:
+
+- Die Testdatenbank muss dediziert sein, weil die Tests `alembic downgrade base` und `upgrade head` ausfuehren.
+- Ohne Netzwerkzugriff auf den Host schlagen die Tests vor dem eigentlichen Fachsetup fehl.
+- `DATABASE_URL` sollte fuer Alembic und `TEST_DATABASE_URL` fuer PostgreSQL-Tests auf dieselbe dedizierte Instanz zeigen, wenn der Testpfad lokal verifiziert wird.
+
 ## M4c Dokument-Lifecycle im Betrieb
 
 Dieses Dokument beschreibt nur den aktuell nachgewiesenen Betriebsstand des Dokument-Lifecycle.

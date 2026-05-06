@@ -250,6 +250,7 @@ Abschlussbewertung fuer M4a:
 Stand des Abgleichs mit Code, Tests und Dokumentation am 2026-05-05:
 
 - Die Upload-GUI ist in der Dokumentuebersicht implementiert und nutzt den asynchronen Importpfad mit Hintergrundjob-Polling.
+- Die finale Architekturentscheidung fuer die Upload-Ausfuehrung ist **interne persistente Queue**, nicht synchroner Upload und nicht `FastAPI BackgroundTasks` als Zielarchitektur; verbindlich dokumentiert in [docs/adr/0004-upload-execution-model.md](docs/adr/0004-upload-execution-model.md).
 - `POST /documents/import` liefert `202 Accepted` mit einem `document_import`-Job; die GUI pollt anschliessend den Jobstatus.
 - Erfolgreiche Importe werden in der GUI mit Dateiname, Dokument-ID, `import_status`, Chunk-Anzahl und bei Bedarf Duplicate-Hinweis angezeigt.
 - Fehler aus dem Importpfad werden nicht mehr synchron am Upload-Endpunkt erwartet, sondern erscheinen als `failed`-Job mit `error_code` und `error_message`.

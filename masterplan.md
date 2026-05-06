@@ -25,6 +25,7 @@ Paket 5 hat die stabile Dokument-Read-API und Datenkonsistenz vor M3 Suche/Retri
 | Chunking | Chunks aus normalisiertem Markdown | ✅ implementiert |
 | Quellenanker | normalisiertes `source_anchor` fuer API | ✅ implementiert |
 | Duplicate Protection | DB-seitig per `(workspace_id, content_hash)` | ✅ implementiert |
+| Upload-Ausfuehrung | persistierte interne Queue mit `202 + job_id + polling`; `BackgroundTasks` nur Bruecke | teilweise implementiert |
 | Fehlerstandard | einheitliches API-Error-Envelope | ✅ implementiert fuer Paket-5-Pfade |
 | OCR | explizit nicht Teil von Paket 5 | fehlt |
 | GUI-Start | M3a erst nach erfolgreichem Paket-5-Gate mit Score >= 90 | ✅ gestartet und als read-only GUI-Basis umgesetzt |

@@ -44,6 +44,7 @@ Benötigte Umgebungsvariablen fuer den vollstaendigen Backend-Betrieb:
 
 - `APP_ENV`: Laufzeitumgebung, lokal standardmaessig `local`.
 - `DATABASE_URL`: PostgreSQL-Verbindungsstring fuer Remote-DB, z. B. `postgresql+psycopg://user:password@host:5432/dbname`.
+- `TEST_DATABASE_URL`: PostgreSQL-Verbindungsstring fuer echte Integrationstests mit `@pytest.mark.postgres`.
 - `DEFAULT_WORKSPACE_ID`: vorbereitete Workspace-ID fuer V1 Single-User.
 - `DEFAULT_USER_ID`: vorbereitete User-ID fuer V1 Single-User.
 
@@ -63,6 +64,19 @@ Tests ausfuehren:
 cd backend
 pytest
 ```
+
+PostgreSQL-Integrationstests lokal aktivieren:
+
+```powershell
+cd backend
+$env:TEST_DATABASE_URL="postgresql+psycopg://appuser:<password>@85.215.131.200:5432/wissen2026"
+$env:DATABASE_URL=$env:TEST_DATABASE_URL
+.\.venv\Scripts\python.exe -m pytest -m postgres -q
+```
+
+Bekannte Einschraenkung:
+
+- Der aktuelle Verifikationslauf gegen `85.215.131.200:5432` ist aus dieser Umgebung per Connection-Timeout fehlgeschlagen. Die Testumgebung ist damit fachlich vorbereitet, aber infrastrukturell erst nutzbar, wenn Netzwerkzugriff auf die Instanz besteht.
 
 Frontend-Abhaengigkeiten installieren:
 

@@ -17,6 +17,7 @@ Kurzform:
 - Search-Index-Rebuild: als expliziten Job modellieren statt als langen Admin-Request
 - Celery/RQ: spaeter moeglich, aber bewusst nicht im Scope
 - synchroner Upload: verworfen
+- reine `FastAPI BackgroundTasks` als Zielarchitektur: verworfen
 
 ### Klarer Zielzustand
 
@@ -26,6 +27,13 @@ Der Zielzustand ist nicht "BackgroundTasks", sondern:
 - `202 Accepted` mit Job-ID als stabiler API-Vertrag
 - Polling ueber `GET /api/v1/jobs/{job_id}` fuer GUI und Admin-Oberflaechen
 - interner Worker mit exklusivem Claiming und spaeterer Restart-Wiederaufnahme
+
+Expliziter Ist-Zustand am 2026-05-06:
+
+- Der persistierte Jobvertrag ist bereits implementiert.
+- Upload und Search-Rebuild werden bereits als `background_jobs` angelegt.
+- Die eigentliche Ausfuehrung wird aktuell noch durch `FastAPI BackgroundTasks` angestossen.
+- Restart-Sicherheit ist deshalb heute nur teilweise erreicht.
 
 Der aktuelle Stand darf `BackgroundTasks` zum Anschubsen eines In-Process-Workers verwenden. Diese Kopplung ist aber Uebergangstechnik und nicht die Architekturentscheidung.
 

@@ -159,8 +159,40 @@ $env:TEST_DATABASE_URL="postgresql://user:password@host:5432/test_database"
 pytest -m postgres -v
 ```
 
+**Aktuelle Remote-Testdatenbank fuer lokale Integrationstests:**
+
+```powershell
+$env:TEST_DATABASE_URL="postgresql+psycopg://appuser:<password>@85.215.131.200:5432/wissen2026"
+$env:DATABASE_URL=$env:TEST_DATABASE_URL
+```
+
+Beispiel mit der aktuell verwendeten Instanz:
+
+```powershell
+cd backend
+$env:TEST_DATABASE_URL="postgresql+psycopg://appuser:Markus..2026@85.215.131.200:5432/wissen2026"
+$env:DATABASE_URL=$env:TEST_DATABASE_URL
+
+# Verbindung pruefen
+.\.venv\Scripts\python.exe -c "import os, psycopg; from tests.integration.test_migrations import psycopg_url; conn = psycopg.connect(psycopg_url(os.environ['TEST_DATABASE_URL']), connect_timeout=10); cur = conn.cursor(); cur.execute('select 1'); print(cur.fetchone()[0]); conn.close()"
+
+# Alembic pruefen
+.\.venv\Scripts\python.exe -m alembic heads
+.\.venv\Scripts\python.exe -m alembic current
+
+# PostgreSQL-Tests aktivieren
+.\.venv\Scripts\python.exe -m pytest -m postgres -q
+```
+
 `TEST_DATABASE_URL` muss auf eine **dedizierte Testdatenbank** zeigen.
 Der Test fuehrt `alembic downgrade base` aus und entfernt dabei alle Tabellen.
+
+Bekannte Einschraenkungen:
+
+- Die Ziel-Datenbank muss vom lokalen Rechner oder der CI-Umgebung auf `85.215.131.200:5432` erreichbar sein.
+- Im aktuellen Verifikationslauf aus dieser Umgebung ist die Verbindung per `psycopg.errors.ConnectionTimeout` fehlgeschlagen.
+- Solange die Instanz nicht erreichbar ist, schlagen Alembic und alle `@pytest.mark.postgres`-Tests vor dem eigentlichen Fachtest fehl.
+- Die URL enthaelt produktionsnahe Zugangsdaten und darf deshalb nicht in `.env`, `pyproject.toml` oder Git-committete Konfigurationsdateien geschrieben werden.
 
 ### Race-Test fuer doppelte Uploads
 

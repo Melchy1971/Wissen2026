@@ -4,6 +4,8 @@
 
 Angenommen.
 
+Stand der finalen Entscheidung: 2026-05-06.
+
 ## 1. Kontext
 
 Der Uploadpfad ist fachlich kein kurzer CRUD-Request mehr. Bereits heute koennen folgende Schritte die Laufzeit deutlich verlaengern:
@@ -67,17 +69,35 @@ Schwaechen:
 
 ## 3. Entscheidung
 
-Der Zielzustand fuer Upload-Ausfuehrung ist:
+Die finale Architekturentscheidung fuer Upload-Ausfuehrung ist:
 
 - **Option 3: interne persistente Queue**
 - Persistenz ueber die bestehende Datenbanktabelle `background_jobs`
-- Ausfuehrung ueber einen kleinen internen Worker mit exklusivem Job-Claiming
 - HTTP-Vertrag bleibt `POST /documents/import -> 202 Accepted + job_id`
 - GUI-Fortschritt bleibt Polling-basiert ueber `GET /api/v1/jobs/{job_id}`
+- Die fachliche Verarbeitung wird explizit vom Request entkoppelt
 
-`FastAPI BackgroundTasks` sind **nicht** die Zielarchitektur. Sie duerfen nur als temporaere Bruecke dienen, um lokal nach dem Request einen In-Process-Worker anzustossen, solange noch kein eigenstaendiger Queue-Loop beim App-Start Jobs claimt.
+Klarer Zielzustand:
 
-Synchroner Upload wird nicht weiter verfolgt.
+- Uploads laufen nicht synchron im HTTP-Request
+- `FastAPI BackgroundTasks` sind nicht das Zuverlaessigkeitsmodell
+- Ein interner Worker zieht persistierte Jobs mit exklusivem Claiming aus der Queue
+- Restart-Sicherheit wird ueber persistierten Jobzustand, Lock-Informationen und Requeue-Regeln erreicht
+- Dieselbe Architektur gilt auch fuer andere lange Backend-Aktionen wie `search_index_rebuild`
+
+Explizit verworfen:
+
+- **Option 1: synchron** wird nicht weiter verfolgt
+- **Option 2: FastAPI BackgroundTasks als Zielarchitektur** wird nicht weiter verfolgt
+
+Aktueller Implementierungsstand zum Zeitpunkt dieser Entscheidung:
+
+- `background_jobs` ist bereits implementiert
+- `POST /documents/import` liefert bereits `202 Accepted`
+- Job-Polling ueber `GET /api/v1/jobs/{job_id}` ist implementiert
+- Der Start der Ausfuehrung erfolgt aktuell noch per `FastAPI BackgroundTasks` als In-Process-Trigger
+
+Damit ist die Architekturentscheidung bereits teilweise umgesetzt, aber der vollstaendige Zielzustand ist noch nicht erreicht.
 
 ## 4. Entscheidung nach Bewertungskriterien
 
@@ -135,6 +155,8 @@ Negative Konsequenzen:
 
 ## 7. Migrationsplan
 
+Die Migration betrifft primaer Applikationslogik und Betriebsverhalten, nicht den oeffentlichen Upload-Vertrag. Fuer die GUI bleibt der Vertrag `202 + job_id + polling` stabil.
+
 ### Phase 0: Ist-Zustand festhalten
 
 Ist bereits implementiert:
@@ -157,6 +179,7 @@ Technische Schritte:
 - Queue- und Worker-Begriffe in Code und Doku vereinheitlichen
 - Jobhandler idempotent halten
 - Observability an Job-Claim, Job-Start, Job-Ende anschliessen
+- explizit dokumentieren, dass Request-Ende nicht der Scheduler ist
 
 ### Phase 2: echten internen Worker-Loop einfuehren
 
@@ -169,6 +192,7 @@ Technische Schritte:
 - App-Start-Hook oder separater interner Worker-Loop zieht `queued` Jobs periodisch
 - exklusives Claiming ueber atomaren Statuswechsel oder DB-Locking
 - Wiederaufnahme oder Requeue alter `running` Jobs anhand von `locked_at`
+- `BackgroundTasks` nur noch optional als Wake-up-Impuls verwenden oder ganz entfernen
 
 ### Phase 3: Restart-Sicherheit fertigstellen
 
@@ -181,6 +205,7 @@ Technische Schritte:
 - Stale-Lock-Timeout definieren
 - Recovery-Regeln fuer `queued` und alte `running` Jobs dokumentieren
 - Runbook fuer haengende Jobs ergaenzen
+- sicherstellen, dass Temp-Dateien und Jobstatus nach Neustart konsistent behandelt werden
 
 ### Phase 4: `BackgroundTasks` optional entfernen
 
@@ -192,6 +217,15 @@ Nicht zwingend sofort noetig:
 
 - Der API-Vertrag bleibt identisch
 - Das Frontend braucht keine Migration
+
+### Nicht noetige Migrationen
+
+Diese Entscheidung erfordert bewusst nicht:
+
+- keine API-Umstellung von Polling auf WebSockets
+- keine neue externe Infrastruktur wie Redis, RabbitMQ oder Celery
+- keine GUI-Migration auf ein neues Upload-Protokoll
+- keine Rueckkehr zu synchronen Responses mit fertigem Importergebnis
 
 ## 8. Akzeptanzkriterien fuer den Zielzustand
 
